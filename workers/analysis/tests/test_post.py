@@ -1,4 +1,5 @@
 from tabgen_analysis.chord_label import parse
+from tabgen_analysis.pipeline import choose_beat_grid
 from tabgen_analysis.stages import post
 
 
@@ -31,6 +32,16 @@ def test_grid_bars_with_pickup():
     merged = post.merge_chords(grid)
     assert [m["label"] for m in merged] == ["N", "C:maj", "G:maj"]
     assert merged[1]["beats"] == 4
+
+
+def test_double_time_falls_back_to_allin1():
+    bt = {"bpm": 150.0, "beats": [0, 0.4], "downbeats": [0]}
+    aio = {"bpm": 76, "beats": [0.7, 1.5, 2.3], "downbeats": [0.7, 4.0, 7.3, 10.6, 13.9]}
+    grid, src = choose_beat_grid(bt, aio)
+    assert src == "allin1" and grid["bpm"] == 76.0
+    grid, src = choose_beat_grid({"bpm": 115.4, "beats": [], "downbeats": []},
+                                 {"bpm": 118, "beats": [], "downbeats": [1, 2, 3, 4, 5]})
+    assert src == "beat_this"
 
 
 def test_snap_sections_drops_silence_and_snaps():

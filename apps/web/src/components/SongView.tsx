@@ -29,7 +29,8 @@ function fmtTime(t: number) {
 function beatAt(grid: Analysis['grid'], t: number): number {
   let lo = 0
   let hi = grid.length - 1
-  if (!grid.length || t < grid[0].t) return -1
+  if (!grid.length) return -1
+  if (t < grid[0].t) return 0
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1
     if (grid[mid].t <= t) lo = mid
@@ -209,6 +210,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <div className="song">
+      <div className="song-sticky">
       <header className="song-head">
         <button className="link" onClick={onBack}>{t('back')}</button>
         <div className="song-title">
@@ -317,6 +319,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
         </label>
       </div>
       {effCapo > 0 && <div className="capo-note">{t('capoExplain', { n: effCapo })}</div>}
+      </div>
 
       <div className="player-box">
         <div className="ctl seg">
@@ -342,10 +345,12 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
         )}
       </div>
 
-      <ChordGrid
-        analysis={a} names={names} changes={changes} sectionNames={secNames} curBeat={curBeat}
-        loop={loop} autoScroll={autoScroll && playing} onSeek={seek}
-      />
+      <div className="grid-wrap">
+        <ChordGrid
+          analysis={a} names={names} changes={changes} sectionNames={secNames} curBeat={curBeat}
+          loop={loop} autoScroll={autoScroll && playing} onSeek={seek}
+        />
+      </div>
       <p className="muted small foot">{t('accuracyNote')} · {t('shortcuts')} · {barStart(0) >= 0 && `${a.models.chords} · ${a.models.device}`}</p>
     </div>
   )

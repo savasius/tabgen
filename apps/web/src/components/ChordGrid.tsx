@@ -18,7 +18,9 @@ function ChordGridImpl({ analysis, names, changes, sectionNames, curBeat, loop, 
   const curBar = curBeat >= 0 ? analysis.grid[curBeat].bar : -1
 
   useEffect(() => {
-    if (autoScroll && activeRef.current) activeRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (autoScroll && activeRef.current) {
+      activeRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    }
   }, [curBar, autoScroll])
 
   // Group bars into blocks per section.

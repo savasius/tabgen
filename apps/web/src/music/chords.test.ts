@@ -27,6 +27,12 @@ describe('chords', () => {
     expect(formatChord(transpose(parseHarte('B:maj'), -4))).toBe('G')
     expect(fmt('B:maj', 'full', 0, 4)).toBe('G')
     expect(formatChord(parseHarte('A#:maj'), spellingForKey(5, 'major'))).toBe('Bb')
+    expect(formatChord(parseHarte('G#:min'), spellingForKey(11, 'major'))).toBe('G#m')
+    expect(formatChord(parseHarte('A#:maj'), spellingForKey(5, 'minor'))).toBe('Bb')
+    const capo4 = ['B:maj', 'F#:maj', 'G#:min', 'E:maj'].map((l) =>
+      formatChord(displayChord(l, { level: 'basic', transpose: 0, capo: 4 }), spellingForKey(7, 'major')),
+    )
+    expect(capo4).toEqual(['G', 'D', 'Em', 'C'])
   })
 
   it("suggests capo 4 for I'm Yours (B F# G#m E)", () => {

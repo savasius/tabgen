@@ -72,7 +72,11 @@ const FLAT_MINOR = new Set([2, 7, 0, 5, 10, 3]) // Dm Gm Cm Fm Bbm Ebm
 
 export function spellingForKey(tonic: number | null, mode: string | undefined): Spelling {
   if (tonic === null) return 'common'
-  return (mode === 'minor' ? FLAT_MINOR : FLAT_MAJOR).has(tonic) ? 'flats' : 'common'
+  const flats = mode === 'minor' ? FLAT_MINOR : FLAT_MAJOR
+  if (flats.has(tonic)) return 'flats'
+  // C major / A minor: mixed conventional names. Sharp keys (G D A E B F# …) keep G# not Ab.
+  if ((mode === 'minor' && tonic === 9) || (mode !== 'minor' && tonic === 0)) return 'common'
+  return 'sharps'
 }
 
 export function noteName(pc: number, spelling: Spelling = 'common'): string {
