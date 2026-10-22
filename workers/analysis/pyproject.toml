@@ -1,0 +1,35 @@
+[project]
+name = "tabgen-analysis"
+version = "0.1.0"
+description = "TabGen analysis pipeline: audio -> beats, sections, chords, key"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "scipy",
+  "librosa>=0.10",
+  "soundfile",
+  "pydantic>=2",
+  "torch",
+  "torchaudio",
+  "beat-this>=1.1",
+  "all-in-one-infer>=3.1",
+  "lv-chordia>=1.1",
+  # S-KEY is installed from git with --no-deps (its pins are too strict); see scripts/setup.sh
+  "nnAudio==0.3.3",
+  "einops",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+url = ["yt-dlp"]
+dev = ["pytest", "mir_eval"]
+
+[project.scripts]
+tabgen-analyze = "tabgen_analysis.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tabgen_analysis*"]

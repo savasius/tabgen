@@ -14,8 +14,8 @@ dist/
 .vite/
 
 # Data / caches / models
-backend/data/
-backend/models/*.pt
+/data/
+*.ckpt
 *.wav
 *.mp3
 *.m4a
