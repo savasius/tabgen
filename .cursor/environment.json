@@ -1,0 +1,9 @@
+{
+  "install": "./scripts/setup.sh",
+  "terminals": [
+    {
+      "name": "TabGen API + web (dev)",
+      "command": "./scripts/dev.sh"
+    }
+  ]
+}
