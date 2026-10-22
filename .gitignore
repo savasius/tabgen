@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Data / caches / models
+backend/data/
+backend/models/*.pt
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.opus
+
+# Env / OS
+.env
+.env.local
+.DS_Store
