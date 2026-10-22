@@ -30,7 +30,7 @@ const SIMPLIFY: Record<string, [string, string]> = {
   dim: ['dim', 'min'], aug: ['aug', 'maj'], dim7: ['dim7', 'min'], hdim7: ['hdim7', 'min'],
   sus2: ['sus2', 'maj'], sus4: ['sus4', 'maj'], 'sus4(b7)': ['7sus4', 'maj'], '7sus4': ['7sus4', 'maj'],
   '9': ['7', 'maj'], maj9: ['maj7', 'maj'], min9: ['min7', 'min'], '11': ['7', 'maj'], '13': ['7', 'maj'],
-  maj6: ['maj6', 'maj'], min6: ['min6', 'min'], minmaj7: ['min', 'min'], '5': ['5', 'maj'], '1': ['5', 'maj'],
+  maj6: ['maj6', 'maj'], min6: ['min6', 'min'], minmaj7: ['min', 'min'], '5': ['5', '5'], '1': ['5', '5'],
 }
 
 const SUFFIX: Record<string, string> = {

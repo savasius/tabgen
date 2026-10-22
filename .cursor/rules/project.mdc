@@ -6,12 +6,11 @@ alwaysApply: true
 TabGen: song -> guitar chords (Phase 1), tabs (Phase 2), play-along check (Phase 3). Personal, local-first (macOS / Apple Silicon), free, no cloud services.
 
 Layout
-- `workers/analysis/tabgen_analysis/` — Python pipeline. One module per stage in `stages/` (decode, separate, beats, structure, chords, key, post). Each stage is cached per audio hash under `data/tracks/<hash>/stages/<model-key>.json`; change a stage's MODEL_KEY when its model/settings change. `pipeline.py` orchestrates; bump `PIPELINE_VERSION` in `config.py` when the output JSON changes.
-- `apps/api/tabgen_api/` — FastAPI + in-process single-thread job queue; serves `apps/web/dist` at `/`.
-- `apps/web/` — React + Vite + TS. Chord logic (Harte parsing, transpose, capo, simplify) is pure TS in `src/music/chords.ts` with vitest tests; it mirrors `tabgen_analysis/chord_label.py`.
-- A separate polished UI lives under `design/` (other branch) — don't edit it from pipeline work.
+- `workers/analysis/tabgen_analysis/` — Python pipeline. Stages in `stages/` (decode, separate, beats, structure, chords, key, post, transcribe, tabs) plus `fingering.py` / `techniques.py` / `tab_export.py`. Cache per audio hash under `data/tracks/<hash>/stages/<model-key>.json`. Bump `PIPELINE_VERSION` when the output JSON changes. Tab or Demucs failure must not drop the chord result. Demucs always runs on CPU when `DEVICE=mps`. Optional stages time out instead of hanging. Post: power-chord :5 from flicker or missing thirds; key from chord hierarchy (not a song list); half/double BPM fold into 70–168.
+- `apps/api/tabgen_api/` — FastAPI + in-process job queue; serves `apps/web/dist`. `POST /v1/analyses/{id}/reanalyze` reuses cached mix/stems.
+- `apps/web/` — React + Vite + TS. Chord logic in `src/music/chords.ts`; tab view is alphaTab + measure table + fretboard. Don't edit `design/` from pipeline work.
 
-Models (keep swappable; see README licenses): Beat This! (beats), all-in-one-infer (sections, reuses our stems), lv-chordia (chords, behind `ChordRecognizer` in `stages/chords.py`), S-KEY (key), Demucs htdemucs_6s (stems). Do not add madmom NC models, Essentia, Chordino, BTC, Rubber Band, or other GPL/AGPL/NC components.
+Models (keep swappable): Beat This!, all-in-one-infer, lv-chordia (`ChordRecognizer`), S-KEY, Demucs htdemucs_6s, Basic Pitch + optional TabCNN-GPFX. Do not add madmom NC models, Essentia, Chordino, BTC, Rubber Band, or other GPL/AGPL/NC components.
 
 UI text: Turkish first, English second, all strings in `apps/web/src/i18n.tsx`.
 

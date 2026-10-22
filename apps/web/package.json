@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coderline/alphatab": "^1.8.4",
+    "@coderline/alphatab-vite": "^1.8.4",
     "@tombatossals/chords-db": "^0.5.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

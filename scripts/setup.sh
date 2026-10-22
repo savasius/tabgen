@@ -38,7 +38,10 @@ fi
 
 if [[ ! -x .venv/bin/python ]]; then
   say "Creating .venv with $PY"
-  "$PY" -m venv .venv
+  if ! "$PY" -m venv .venv 2>/dev/null; then
+    "$PY" -m venv --without-pip .venv
+    curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+  fi
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
@@ -56,6 +59,9 @@ pip install -q -e workers/analysis -e apps/api
 # S-KEY pins old torch/numpy versions; install without its deps (they are already satisfied).
 pip install -q --no-deps "skey @ git+https://github.com/deezer/s-key@918b83d273568d5041569bb8068843d19a335726"
 pip install -q --no-deps nnAudio==0.3.3
+# basic-pitch's Linux extra wants TensorFlow; we use the bundled ONNX model instead.
+pip install -q --no-deps basic-pitch==0.4.0
+pip install -q mir_eval 'resampy>=0.2.2,<0.4.3'
 
 say "Downloading model weights (one time, ~1 GB)"
 python -m tabgen_analysis.prefetch

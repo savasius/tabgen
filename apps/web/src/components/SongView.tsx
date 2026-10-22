@@ -9,6 +9,7 @@ import { audioPlayer, countIn, youtubePlayer, type PlayerApi } from '../player'
 import { ChordDiagram } from './ChordDiagram'
 import { ChordGrid } from './ChordGrid'
 import { SECTION_COLORS, sectionNames } from './sections'
+import { TabView } from './TabView'
 
 const NOTE_PC: Record<string, number> = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 }
 
@@ -57,6 +58,8 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
   const [curBeat, setCurBeat] = useState(-1)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [view, setView] = useState<'chords' | 'tab'>('chords')
+  const [reErr, setReErr] = useState<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const ytMount = useRef<HTMLDivElement>(null)
@@ -69,6 +72,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
   useEffect(() => {
     api.analysis(id).then((d) => {
       setA(d)
+      if (d.tab?.notes?.length) setView('tab')
       if (d.meta.youtube_id) { setYtInput(d.meta.youtube_id); setYtOffset(d.meta.youtube_offset ?? 0) }
     }).catch((e) => setError(String(e.message ?? e)))
   }, [id])
@@ -103,6 +107,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
     let raf = 0
     let lastBeat = -2
     let lastShown = -1
+    let lastPlaying: boolean | null = null
     const tick = () => {
       const p = playerRef.current
       if (p) {
@@ -111,8 +116,9 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
         if (l && p.isPlaying() && now >= l.b) { p.seek(l.a); now = l.a }
         const b = beatAt(a.grid, now)
         if (b !== lastBeat) { lastBeat = b; setCurBeat(b) }
-        if (Math.abs(now - lastShown) >= 0.25) { lastShown = now; setTime(now) }
-        setPlaying(p.isPlaying())
+        if (Math.abs(now - lastShown) >= 0.08) { lastShown = now; setTime(now) }
+        const isP = p.isPlaying()
+        if (isP !== lastPlaying) { lastPlaying = isP; setPlaying(isP) }
       }
       raf = requestAnimationFrame(tick)
     }
@@ -218,11 +224,30 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
           {a.meta.artist && <span className="muted">{a.meta.artist}</span>}
         </div>
         <div className="song-facts">
-          <span>{t('key')}: <b>{soundingKey} {t(a.key.mode)}</b></span>
+          <span>{t('key')}: <b>{soundingKey} {t(a.key.mode)}</b>
+            {a.key.relative_adjusted && a.key.skey_tonic
+              ? <span className="muted small"> ({a.key.skey_tonic} {a.key.skey_mode})</span>
+              : null}
+          </span>
           <span>{t('tempo')}: <b>{Math.round(a.tempo.bpm)} BPM</b> ({a.tempo.time_signature})</span>
           <span>{t('tuning')}: <b>{Math.abs(a.tuning.cents) <= 10 ? t('tuningStd') : t('tuningOff', { c: a.tuning.cents })}</b></span>
         </div>
+        <div className="ctl seg view-tabs">
+          <button className={view === 'chords' ? 'on' : ''} onClick={() => setView('chords')}>{t('viewChords')}</button>
+          <button className={view === 'tab' ? 'on' : ''} onClick={() => setView('tab')}>{t('viewTab')}</button>
+        </div>
       </header>
+      {(a.stale || !a.tab?.notes?.length) && (
+        <div className="banner warn">
+          {t('staleBanner')}
+          <button onClick={() => {
+            setReErr(null)
+            api.reanalyze(a.id).then((j) => { window.location.hash = `#/job/${j.id}` })
+              .catch((e) => setReErr(String((e as Error).message)))
+          }}>{t('reanalyze')}</button>
+          {reErr && <span className="error">{reErr}</span>}
+        </div>
+      )}
 
       <div className="sections-strip">
         {a.sections.map((s, i) => (
@@ -246,7 +271,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
         {loop && <div className="progress-loop" style={{ left: `${(loop.a / a.duration) * 100}%`, width: `${((loop.b - loop.a) / a.duration) * 100}%` }} />}
       </div>
 
-      <div className="now-next">
+      {view === 'chords' && <div className="now-next">
         <div className="now">
           <div className="label">{t('now')}</div>
           <div className="now-chord">{nowBeat >= 0 ? names[nowBeat] : '—'}</div>
@@ -264,7 +289,7 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
             ))}
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="controls">
         <button className="play" onClick={togglePlay}>{playing ? '❚❚ ' + t('pause') : '▶ ' + t('play')}</button>
@@ -345,12 +370,16 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
         )}
       </div>
 
-      <div className="grid-wrap">
-        <ChordGrid
-          analysis={a} names={names} changes={changes} sectionNames={secNames} curBeat={curBeat}
-          loop={loop} autoScroll={autoScroll && playing} onSeek={seek}
-        />
-      </div>
+      {view === 'chords' ? (
+        <div className="grid-wrap">
+          <ChordGrid
+            analysis={a} names={names} changes={changes} sectionNames={secNames} curBeat={curBeat}
+            loop={loop} autoScroll={autoScroll && playing} onSeek={seek}
+          />
+        </div>
+      ) : (
+        <TabView analysis={a} time={time} curBeat={curBeat} onSeek={seek} autoScroll={autoScroll} playing={playing} />
+      )}
       <p className="muted small foot">{t('accuracyNote')} · {t('shortcuts')} · {barStart(0) >= 0 && `${a.models.chords} · ${a.models.device}`}</p>
     </div>
   )

@@ -8,7 +8,7 @@ import torch
 
 from ..device import run_with_fallback
 
-MODEL_KEY = "skey-0.1"
+MODEL_KEY = "skey-0.1-top2"
 
 # Order of S-KEY's 24 outputs (skey.key_detection.key_map), as (tonic, mode).
 _KEYS = [(t, "major") for t in ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]] + \
@@ -34,9 +34,16 @@ def detect_key(audio_path: Path) -> dict:
         return probs.cpu().numpy()
 
     probs = run_with_fallback("s-key", run)
-    i = int(np.argmax(probs))
+    order = np.argsort(-probs)
+    i = int(order[0])
+    j = int(order[1]) if len(order) > 1 else i
     tonic, mode = _KEYS[i]
-    return {"tonic": tonic, "mode": mode, "confidence": round(float(probs[i]), 3)}
+    alt_tonic, alt_mode = _KEYS[j]
+    return {
+        "tonic": tonic, "mode": mode, "confidence": round(float(probs[i]), 3),
+        "alt_tonic": alt_tonic, "alt_mode": alt_mode,
+        "alt_confidence": round(float(probs[j]), 3),
+    }
 
 
 def estimate_tuning(audio_path: Path) -> dict:

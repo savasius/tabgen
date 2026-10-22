@@ -18,6 +18,8 @@ describe('chords', () => {
     expect(fmt('A:min9', 'normal')).toBe('Am7')
     expect(fmt('A:min9', 'basic')).toBe('Am')
     expect(fmt('G:sus4(b7)', 'basic')).toBe('G')
+    expect(fmt('F:5', 'basic')).toBe('F5')
+    expect(fmt('F:5', 'normal')).toBe('F5')
     expect(fmt('C:maj/3', 'normal')).toBe('C')
     expect(formatChord(atLevel(parseHarte('B:dim'), 'basic'))).toBe('Bm')
   })

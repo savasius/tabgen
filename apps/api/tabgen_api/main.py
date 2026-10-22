@@ -72,14 +72,18 @@ def get_job(job_id: str):
 
 @app.get("/v1/analyses")
 def list_analyses():
-    return [e for e in library.list_recent() if pipeline.analysis_path(e["id"]).exists()]
+    out = []
+    for e in library.list_recent():
+        if pipeline.find_analysis(e["id"]) or (config.track_dir(e["id"]) / "mix.wav").exists():
+            out.append(e)
+    return out
 
 
 def _analysis_file(analysis_id: str) -> Path:
     if not analysis_id.isalnum():
         raise HTTPException(400, "Bad id")
-    p = pipeline.analysis_path(analysis_id)
-    if not p.exists():
+    p = pipeline.find_analysis(analysis_id)
+    if not p:
         raise HTTPException(404, "Analysis not found")
     return p
 
@@ -89,7 +93,44 @@ def get_analysis(analysis_id: str):
     data = json.loads(_analysis_file(analysis_id).read_text())
     data["meta"] = {**data.get("meta", {}), **(library.get(analysis_id) or {})}
     data.pop("raw_chords", None)
+    data["stale"] = data.get("version") != PIPELINE_VERSION
+    if data.get("tab"):
+        data["tab"].pop("musicxml", None)
+    data.setdefault("tab", None)
     return data
+
+
+@app.post("/v1/analyses/{analysis_id}/reanalyze")
+def reanalyze(analysis_id: str):
+    if not analysis_id.isalnum():
+        raise HTTPException(400, "Bad id")
+    mix = config.track_dir(analysis_id) / "mix.wav"
+    if not mix.exists():
+        raise HTTPException(404, "Cached audio missing — upload the file again")
+    return jobs.submit_reanalyze(analysis_id).to_dict()
+
+
+@app.get("/v1/analyses/{analysis_id}/export/musicxml")
+def export_musicxml(analysis_id: str):
+    _analysis_file(analysis_id)
+    p = pipeline.tab_musicxml_path(analysis_id)
+    if not p.exists():
+        raise HTTPException(404, "No tab MusicXML yet — reanalyze this song")
+    return FileResponse(p, media_type="application/vnd.recordare.musicxml+xml",
+                        filename=f"{analysis_id}.musicxml")
+
+
+@app.get("/v1/analyses/{analysis_id}/export/alphatex")
+def export_alphatex(analysis_id: str):
+    _analysis_file(analysis_id)
+    p = pipeline.tab_alphatex_path(analysis_id)
+    if not p.exists():
+        data = json.loads(_analysis_file(analysis_id).read_text())
+        tex = (data.get("tab") or {}).get("alpha_tex")
+        if not tex:
+            raise HTTPException(404, "No tab yet — reanalyze this song")
+        return tex
+    return FileResponse(p, media_type="text/plain", filename=f"{analysis_id}.alphatex")
 
 
 @app.patch("/v1/analyses/{analysis_id}")

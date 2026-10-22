@@ -7,9 +7,22 @@ Audio files stay out of the repo. After analyzing a song:
   --expect "G D Em C" --key "G major"
 ```
 
-`--expect` is the sounding chord vocabulary at the **basic** (maj/min) level.
-`in expected vocabulary` requires the quality (Am vs A); `root in expected roots`
-forgives major/minor swaps, which power-chord songs (e.g. grunge) trigger often.
+`--expect` is the sounding chord vocabulary at the **basic** (maj/min/power) level.
+`in expected vocabulary` matches quality (Am vs A) but treats `F5` as matching `F`/`Fm`.
+`root in expected roots` is family-only. Relative major/minor key swaps are reported
+separately by `eval/score.py` (`exact` vs `relative`).
+
+Synth clips (generated, not commercial recordings) — these are the Phase 2
+regression set (I–V–vi–IV, power-chord riff, relative-minor home, pentatonic solo):
+
+```bash
+.venv/bin/python eval/synth.py
+.venv/bin/python eval/tab_smoke.py          # Basic Pitch + Viterbi F1 on the pentatonic solo
+PYTHONPATH=workers/analysis .venv/bin/python eval/run_synth_pipeline.py
+```
+
+`run_synth_pipeline.py` writes `data/eval/summary.json`. Do not add per-song
+overrides to chase one clip; remaining errors belong in the accuracy report.
 
 Phase 1 smoke songs (personal copies, not redistributed):
 

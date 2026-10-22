@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from tabgen_analysis import pipeline
+from tabgen_analysis import config, pipeline
 from tabgen_analysis.stages.decode import decode, probe_tags
 
 from . import library, sources
@@ -95,4 +95,27 @@ def submit_url(url: str) -> Job:
     job = _new_job()
     meta = {"source": "url", "url": url, "youtube_id": sources.youtube_id(url)}
     _executor.submit(_run, job, lambda tmp: sources.download(url, tmp), meta)
+    return job
+
+
+def submit_reanalyze(audio_hash: str) -> Job:
+    """Re-run the current pipeline on cached mix/stems. Demucs is skipped if stems exist."""
+    job = _new_job()
+
+    def work():
+        try:
+            mix = config.track_dir(audio_hash) / "mix.wav"
+            if not mix.exists():
+                raise FileNotFoundError("Cached audio missing — please upload the file again")
+            _set(job, status="running", analysis_id=audio_hash, stage="transcribe", progress=5)
+            meta = library.get(audio_hash) or {}
+            pipeline.run(mix, meta=meta, audio_hash=audio_hash, force=True,
+                         progress=lambda stage, pct: _set(job, stage=stage, progress=pct))
+            library.upsert(audio_hash, meta)
+            _set(job, status="done", stage="done", progress=100)
+        except Exception as e:
+            log.error("reanalyze %s failed: %s", job.id, traceback.format_exc())
+            _set(job, status="failed", error=str(e) or e.__class__.__name__)
+
+    _executor.submit(work)
     return job

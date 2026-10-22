@@ -19,7 +19,11 @@ from tabgen_analysis.chord_label import parse, pc  # noqa: E402
 
 def sym(label: str) -> str:
     c = parse(parse(label).level("basic"))
-    return "N" if c.is_none else c.root + ("m" if c.quality == "min" else "")
+    if c.is_none or c.root is None:
+        return "N"
+    if c.quality == "5":
+        return c.root + "5"
+    return c.root + ("m" if c.quality == "min" else "")
 
 
 def norm(s: str) -> str:
@@ -39,8 +43,16 @@ def main() -> None:
     expected_roots = {parse(norm(x)).root for x in args.expect.split()}
     beats = [sym(g["chord"]) for g in a["grid"]]
     voiced = [b for b in beats if b != "N"]
-    in_vocab = sum(b in expected for b in voiced) / max(1, len(voiced))
-    root_ok = sum(b.rstrip("m") in expected_roots for b in voiced) / max(1, len(voiced))
+
+    def family(s: str) -> str:
+        return s[:-1] if s.endswith("5") else s.rstrip("m")
+
+    in_vocab = sum(
+        b in expected
+        or (b.endswith("5") and (family(b) in expected or family(b) + "m" in expected))
+        for b in voiced
+    ) / max(1, len(voiced))
+    root_ok = sum(family(b) in expected_roots for b in voiced) / max(1, len(voiced))
 
     print(f"title: {a['meta'].get('title')}  duration: {a['duration']:.0f}s  bpm: {a['tempo']['bpm']} "
           f"(allin1 {a['tempo'].get('bpm_allin1')})  {a['tempo']['time_signature']}")

@@ -18,6 +18,8 @@ dependencies = [
   "nnAudio==0.3.3",
   "einops",
   "tqdm",
+  "onnxruntime",
+  "pretty-midi",
 ]
 
 [project.optional-dependencies]
