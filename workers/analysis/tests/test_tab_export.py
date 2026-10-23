@@ -120,3 +120,44 @@ def test_musicxml_slide_and_vibrato():
     xml = to_musicxml(notes, BARS, BEATS, 2.0, title="x", bpm=120)
     assert 'slide type="start"' in xml or "<slide" in xml
     assert "wavy-line" in xml
+
+
+def test_long_note_does_not_swallow_later_onsets():
+    # A ringing bass note (whole bar) with melody on top: every onset must reach the tab.
+    notes = [
+        {"start": 0.0, "end": 1.95, "midi": 40, "string": 6, "fret": 0, "techniques": []},
+        {"start": 0.5, "end": 0.7, "midi": 64, "string": 1, "fret": 0, "techniques": []},
+        {"start": 1.0, "end": 1.2, "midi": 67, "string": 1, "fret": 3, "techniques": []},
+    ]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0)
+    body = tex.split("\n.\n", 1)[1]
+    assert "0.6" in body and "0.1" in body and "3.1" in body
+    xml = to_musicxml(notes, BARS, BEATS, 2.0)
+    assert xml.count("<fret>") == 3
+
+
+def test_chord_continuation_is_tied_not_repicked():
+    notes = [
+        {"start": 0.0, "end": 1.9, "midi": 40, "string": 6, "fret": 0, "techniques": []},
+        {"start": 0.0, "end": 1.9, "midi": 47, "string": 5, "fret": 2, "techniques": []},
+    ]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0)
+    # 15 sixteenths = half + quarter + eighth + sixteenth: first chunk picked, rest tied.
+    assert "(2.5{t} 0.6{t})" in tex or "(0.6{t} 2.5{t})" in tex
+
+
+def test_bend_release_points():
+    notes = [{"start": 0.0, "end": 0.9, "midi": 57, "string": 3, "fret": 2,
+              "techniques": [{"type": "bend", "quarter_tones": 4, "release": True}]}]
+    assert "{b (0 4 4 0)}" in to_alphatex(notes, BARS, BEATS, 2.0)
+
+
+def test_pull_off_is_h_in_alphatex_never_p():
+    # alphaTab: {p} is slap/pop. A pull-off is {h} toward a lower fret on the same string.
+    notes = [
+        {"start": 0.0, "end": 0.24, "midi": 72, "string": 1, "fret": 8,
+         "techniques": [{"type": "pull", "to_fret": 5}]},
+        {"start": 0.25, "end": 0.45, "midi": 69, "string": 1, "fret": 5, "techniques": []},
+    ]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0)
+    assert "8.1{h}" in tex and "{p" not in tex

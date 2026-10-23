@@ -20,6 +20,9 @@ dependencies = [
   "tqdm",
   "onnxruntime",
   "pretty-midi",
+  # basic-pitch → resampy imports pkg_resources, removed in setuptools 81+. Without this pin
+  # the transcribe stage dies on import and every tab becomes the chord-shape fallback.
+  "setuptools<81",
 ]
 
 [project.optional-dependencies]
