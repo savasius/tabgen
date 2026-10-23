@@ -13,7 +13,7 @@ import { beatsPerBar, locatePlayhead, notesAt, staffNotes, timeToTick, type Staf
 import { useSong } from './song-session'
 
 const LEGEND_GLYPH: Record<string, string> = {
-  bend: 'b', slide: 'sl', hammer: 'h', pull: 'h', vibrato: 'v', palmMute: 'pm',
+  bend: 'b', slide: 'sl', hammer: 'h', pull: 'p', vibrato: 'v', palmMute: 'pm',
 }
 
 export function TabView() {

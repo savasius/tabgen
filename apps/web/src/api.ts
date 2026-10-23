@@ -8,6 +8,8 @@ export interface Technique {
   source: 'contour' | 'timing' | 'heuristic' | 'guess' | 'legato'
   cents?: number
   quarter_tones?: number
+  /** bend-and-release folded from a split Basic Pitch note */
+  release?: boolean
   to_fret?: number
 }
 

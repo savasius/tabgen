@@ -249,8 +249,8 @@ function Staff({
             const text = now ? 'var(--primary-foreground)' : 'var(--foreground)'
             const chips = n.glyphs.filter((g) => g !== 'pm').map((g) => {
               if (g === 'b' && n.bendQt) {
-                if (n.bendQt >= 4) return 'b1'
-                if (n.bendQt >= 2) return 'b½'
+                const amt = n.bendQt >= 4 ? 'b1' : n.bendQt >= 2 ? 'b½' : 'b¼'
+                return n.bendRelease ? `${amt}↓` : amt
               }
               return g
             })

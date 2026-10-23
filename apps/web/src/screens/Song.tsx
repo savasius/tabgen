@@ -126,6 +126,11 @@ function SongChrome() {
           {reErr && <span className="text-destructive">{reErr}</span>}
         </div>
       )}
+      {a.warnings?.some((w) => w.code === 'transcribe-failed') && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm">
+          {t('song.transcribeFailed')}
+        </div>
+      )}
       {a.guitar?.warning && (
         <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
           {t('song.guitarWarning')}

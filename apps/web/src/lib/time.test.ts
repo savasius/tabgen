@@ -74,13 +74,15 @@ describe('tab time mapping', () => {
 })
 
 describe('PR #3 technique glyphs', () => {
-  it('uses h for hammer-on and pull-off (never p — that is slap/pop)', () => {
+  // Staff glyphs follow printed-tab convention (5h7, 7p5). The alphaTex writer still emits
+  // {h} for both — in alphaTex {p} is slap/pop (workers/analysis tests cover that).
+  it('uses h for hammer-on and p for pull-off on the staff', () => {
     expect(techniqueGlyph('hammer')).toBe('h')
-    expect(techniqueGlyph('pull')).toBe('h')
+    expect(techniqueGlyph('pull')).toBe('p')
     expect(glyphsForNote(note({
       start: 0, string: 1, fret: 8,
       techniques: [{ type: 'pull', source: 'legato', to_fret: 5 }],
-    }))).toEqual(['h'])
+    }))).toEqual(['p'])
   })
 
   it('uses sl for slide and v for vibrato — never / or ~', () => {
@@ -88,7 +90,7 @@ describe('PR #3 technique glyphs', () => {
     expect(techniqueGlyph('vibrato')).toBe('v')
     expect(techniqueGlyph('bend')).toBe('b')
     expect(techniqueGlyph('palmMute')).toBe('pm')
-    for (const g of ['hammer', 'pull', 'slide', 'vibrato', 'bend', 'palmMute'].map(techniqueGlyph)) {
+    for (const g of ['hammer', 'slide', 'vibrato', 'bend', 'palmMute'].map(techniqueGlyph)) {
       expect(g).not.toBe('p')
       expect(String(g)).not.toContain('/')
       expect(String(g)).not.toContain('~')
@@ -107,13 +109,13 @@ describe('PR #3 technique glyphs', () => {
       note({ start: 1.5, string: 1, fret: 8, techniques: [{ type: 'bend', source: 'contour', quarter_tones: 4 }] }),
       note({ start: 2.0, string: 1, fret: 7, techniques: [{ type: 'vibrato', source: 'contour' }] }),
     ])
-    expect(notes.map((n) => n.technique)).toEqual(['h', undefined, 'h', undefined, 'sl', undefined, 'b', 'v'])
+    expect(notes.map((n) => n.technique)).toEqual(['h', undefined, 'p', undefined, 'sl', undefined, 'b', 'v'])
     expect(notes[0].destId).toBe(notes[1].id)
     expect(notes[2].destId).toBe(notes[3].id)
     expect(notes[4].destId).toBe(notes[5].id)
     expect(notes[6].bendQt).toBe(4)
     expect(notes[6].destId).toBeUndefined()
-    expect(notes.flatMap((n) => n.glyphs).join(' ')).not.toMatch(/\bp\b|[/~]/)
+    expect(notes.flatMap((n) => n.glyphs).join(' ')).not.toMatch(/[/~]/)
   })
 
   it('keeps effects on the attack note and maps whole-step bends to 4 quarter-tones', () => {
@@ -126,5 +128,15 @@ describe('PR #3 technique glyphs', () => {
     ])
     expect(notes[0].glyphs).toEqual(['b'])
     expect(notes[0].bendQt).toBe(4)
+  })
+})
+
+describe('tickToTime', () => {
+  it('inverts timeToTick across uneven beats', async () => {
+    const { timeToTick, tickToTime } = await import('./time')
+    const a = { grid: [{ t: 0.8, end: 1.3 }, { t: 1.3, end: 1.9 }, { t: 1.9, end: 2.4 }] } as never
+    for (const t of [0.8, 1.0, 1.31, 1.75, 2.2]) {
+      expect(tickToTime(a, timeToTick(a, t))).toBeCloseTo(t, 3)
+    }
   })
 })

@@ -36,11 +36,11 @@ export function locatePlayhead(a: Analysis, t: number): { bar: number; pos: numb
 }
 
 /** PR #3 / alphaTab 1.8 note-property glyphs. `{p}` is slap/pop, `{/}` and `{~}` are invalid. */
-export type TechGlyph = 'h' | 'b' | 'sl' | 'v' | 'pm'
+export type TechGlyph = 'h' | 'p' | 'b' | 'sl' | 'v' | 'pm'
 
 export const TECH_GLYPH: Record<string, TechGlyph> = {
   hammer: 'h',
-  pull: 'h',
+  pull: 'p',
   bend: 'b',
   slide: 'sl',
   vibrato: 'v',
@@ -78,6 +78,7 @@ export interface StaffNote {
   techKind?: TabNote['techniques'][number]['type']
   destId?: string
   bendQt?: number
+  bendRelease?: boolean
   midi: number
 }
 
@@ -123,12 +124,13 @@ export function staffNotes(a: Analysis, notes: TabNote[]): StaffNote[] {
       glyphs,
       techKind: kind,
       bendQt: bendQuarterTones(n),
+      bendRelease: !!(n.techniques ?? []).find((t) => t.type === 'bend' && t.release),
       midi: n.midi,
     }
   })
   for (let i = 0; i < mapped.length; i++) {
     const n = mapped[i]
-    if (!n.glyphs.includes('h') && !n.glyphs.includes('sl')) continue
+    if (!n.glyphs.includes('h') && !n.glyphs.includes('p') && !n.glyphs.includes('sl')) continue
     const dest = nextSameString(mapped, i)
     if (dest) n.destId = dest.id
   }
@@ -149,6 +151,16 @@ export function timeToTick(a: Analysis, t: number): number {
   const g = grid[lo]
   const frac = Math.max(0, Math.min(1, (t - g.t) / Math.max(0.001, g.end - g.t)))
   return (lo + frac) * 960
+}
+
+/** Inverse of `timeToTick`: alphaTab tick (960 per analysis beat) → song seconds. */
+export function tickToTime(a: Analysis, tick: number): number {
+  const grid = a.grid
+  if (!grid.length) return 0
+  const i = Math.max(0, Math.min(grid.length - 1, Math.floor(tick / 960)))
+  const frac = Math.max(0, Math.min(1, tick / 960 - i))
+  const g = grid[i]
+  return g.t + frac * Math.max(0, g.end - g.t)
 }
 
 export function notesAt(notes: TabNote[], t: number): TabNote[] {

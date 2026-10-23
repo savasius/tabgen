@@ -166,9 +166,17 @@ export function noteListPlayer(notes: TabNote[], duration: number): PlayerApi & 
   }
 }
 
+/** Song seconds ↔ alphaTab ticks. The alphaTex has one quarter note per analysis beat, so
+ *  alphaTab's own milliseconds are not song time (pickup before beat 1, tempo drift). */
+export interface TickMap {
+  toTick(t: number): number
+  fromTick(tick: number): number
+}
+
 async function alphaTabSynthPlayer(
   host: HTMLElement,
   tex: string,
+  map?: TickMap,
 ): Promise<PlayerApi & { destroy(): void }> {
   const alphaTab = await import('@coderline/alphatab')
   const settings = new alphaTab.Settings()
@@ -211,8 +219,11 @@ async function alphaTabSynthPlayer(
   return {
     play: () => { at.play() },
     pause: () => { at.pause() },
-    seek: (t) => { at.timePosition = Math.max(0, t) * 1000 },
-    time: () => (at.timePosition || 0) / 1000,
+    seek: (t) => {
+      if (map) at.tickPosition = Math.max(0, map.toTick(t))
+      else at.timePosition = Math.max(0, t) * 1000
+    },
+    time: () => (map ? map.fromTick(at.tickPosition || 0) : (at.timePosition || 0) / 1000),
     setRate: (r) => { at.playbackSpeed = r },
     isPlaying: () => at.playerState === Playing,
     destroy: () => {
@@ -231,6 +242,7 @@ export function createTabGuitarPlayer(opts: {
   tex?: string | null
   notes: TabNote[]
   duration: number
+  map?: TickMap
 }): PlayerApi & { destroy(): void } {
   const fallback = noteListPlayer(opts.notes, opts.duration)
   let primary: (PlayerApi & { destroy(): void }) | null = null
@@ -238,7 +250,7 @@ export function createTabGuitarPlayer(opts: {
   let rate = 1
 
   if (opts.host && opts.tex) {
-    void alphaTabSynthPlayer(opts.host, opts.tex).then((p) => {
+    void alphaTabSynthPlayer(opts.host, opts.tex, opts.map).then((p) => {
       if (gone) {
         p.destroy()
         return

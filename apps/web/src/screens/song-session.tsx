@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { Analysis } from '@/api'
 import { useApp } from '@/lib/store'
-import { beatAt } from '@/lib/time'
+import { beatAt, tickToTime, timeToTick } from '@/lib/time'
 import { createTabGuitarPlayer } from '@/lib/tab-player'
 import { guitarStemCandidates, hasIsolatedGuitar, preferredListenMode, resolveGuitarStemUrl } from '@/lib/listen'
 import { bestCapo, capoSuggestions, spellingForKey, type Level } from '@/music/chords'
@@ -201,6 +201,7 @@ export function SongSessionProvider({
       tex: tab.alpha_tex,
       notes: tab.notes ?? [],
       duration: analysis.duration,
+      map: { toTick: (t) => timeToTick(analysis, t), fromTick: (k) => tickToTime(analysis, k) },
     })
     p.setRate(rateRef.current)
     tabRef.current = p
@@ -208,7 +209,7 @@ export function SongSessionProvider({
       p.destroy()
       if (tabRef.current === p) tabRef.current = null
     }
-  }, [analysis.id, analysis.tab?.alpha_tex, analysis.duration, analysis.tab?.notes])
+  }, [analysis, analysis.id, analysis.tab?.alpha_tex, analysis.duration, analysis.tab?.notes])
 
   useEffect(() => {
     let raf = 0
