@@ -10,6 +10,12 @@ export interface PlayerApi {
   isPlaying(): boolean
 }
 
+export interface Loop {
+  start: number
+  end: number
+  label?: string
+}
+
 export function audioPlayer(el: HTMLAudioElement): PlayerApi {
   el.preservesPitch = true
   return {

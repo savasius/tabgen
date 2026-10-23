@@ -1,42 +1,40 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Home } from './components/Home'
-import { JobView } from './components/JobView'
-import { SongView } from './components/SongView'
-import { useI18n } from './i18n'
-
-type Route = { page: 'home' } | { page: 'job'; id: string } | { page: 'song'; id: string }
-
-function parseHash(): Route {
-  const [, page, id] = window.location.hash.split('/')
-  if ((page === 'job' || page === 'song') && id) return { page, id }
-  return { page: 'home' }
-}
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AppProvider } from '@/lib/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Shell } from '@/components/app/Shell'
+import { Library } from '@/screens/Library'
+import { AddSong } from '@/screens/AddSong'
+import { Processing } from '@/screens/Processing'
+import { SongLayout, ChordsView } from '@/screens/Song'
+import { TabView } from '@/screens/TabView'
+import { PlayAlong } from '@/screens/PlayAlong'
+import { Tuner } from '@/screens/Tuner'
+import { Metronome } from '@/screens/Metronome'
+import { Settings } from '@/screens/Settings'
 
 export default function App() {
-  const { t, lang, setLang } = useI18n()
-  const [route, setRoute] = useState<Route>(parseHash)
-
-  useEffect(() => {
-    const onHash = () => setRoute(parseHash())
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [])
-
-  const go = (h: string) => { window.location.hash = h }
-  const onDone = useCallback((id: string) => window.location.replace(`#/song/${id}`), [])
-
   return (
-    <div className="app">
-      <nav className="top">
-        <a className="brand" href="#/">TabGen</a>
-        <span className="muted tagline">{t('appTagline')}</span>
-        <button className="lang" onClick={() => setLang(lang === 'tr' ? 'en' : 'tr')} title={t('language')}>
-          {lang === 'tr' ? 'EN' : 'TR'}
-        </button>
-      </nav>
-      {route.page === 'home' && <Home onJob={(id) => go(`#/job/${id}`)} onSong={(id) => go(`#/song/${id}`)} />}
-      {route.page === 'job' && <JobView id={route.id} onDone={onDone} onBack={() => go('#/')} />}
-      {route.page === 'song' && <SongView key={route.id} id={route.id} onBack={() => go('#/')} />}
-    </div>
+    <AppProvider>
+      <TooltipProvider>
+        <HashRouter>
+          <Routes>
+            <Route element={<Shell />}>
+              <Route index element={<Library />} />
+              <Route path="add" element={<AddSong />} />
+              <Route path="processing/:id" element={<Processing />} />
+              <Route path="song/:id" element={<SongLayout />}>
+                <Route index element={<ChordsView />} />
+                <Route path="tab" element={<TabView />} />
+                <Route path="play" element={<PlayAlong />} />
+              </Route>
+              <Route path="tuner" element={<Tuner />} />
+              <Route path="metronome" element={<Metronome />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </HashRouter>
+      </TooltipProvider>
+    </AppProvider>
   )
 }

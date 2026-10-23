@@ -42,7 +42,7 @@ Linux works the same way (`apt install ffmpeg nodejs python3-venv` first). Windo
 | Transpose ± | renames chords by semitones (audio is not pitch-shifted yet) |
 | Capo | shows the shapes to play with a capo; the suggested capo is pre-selected |
 | Basit / Normal / Tam | Simple = major/minor only, Normal = up to 7ths, Full = everything incl. inversions |
-| Akorlar / Tab | switch between the chord grid and the tab view (alphaTab + fretboard + measure table) |
+| Akorlar / Tab | chord grid, Songsterr-like tab staff (now-line + section jump), light alphaTab stave, fretboard, measure table |
 | Yeniden analiz et | rebuild chords+tab from cached stems (Phase 1 Mac runs are reused; Demucs does not run again) |
 | Player → YouTube | play the official YouTube video instead of the file (embed, nothing downloaded); paste the link and adjust the sync offset |
 
