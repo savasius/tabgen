@@ -327,5 +327,7 @@
       "midi": 47
     }
   ],
-  "duration": 19.4
+  "duration": 19.4,
+  "techniques": [],
+  "clean_until": null
 }

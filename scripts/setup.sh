@@ -45,7 +45,8 @@ if [[ ! -x .venv/bin/python ]]; then
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
-python -m pip install -q -U pip wheel setuptools
+# setuptools 82+ dropped pkg_resources; resampy / basic-pitch still import it.
+python -m pip install -q -U pip wheel 'setuptools<81'
 
 say "Installing PyTorch"
 if [[ "$(uname)" == "Linux" ]] && ! need nvidia-smi; then

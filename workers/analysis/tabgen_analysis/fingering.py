@@ -142,18 +142,29 @@ def _enumerate_assignments(
     return out
 
 
-def _trans_cost(prev: list[tuple[int, int]] | None, cur: list[tuple[int, int]]) -> float:
+def _trans_cost(prev: list[tuple[int, int]] | None, cur: list[tuple[int, int]],
+                *, legato: bool = False, interval: int = 0) -> float:
     if not prev:
         return 0.0
     prev_pos = sum(f for _, f in prev) / len(prev)
     cur_pos = sum(f for _, f in cur) / len(cur)
     cost = 1.6 * abs(prev_pos - cur_pos)
-    prev_by_midi_string = {i: prev[i][0] for i in range(len(prev))}
-    # Same-string continuity when group sizes match isn't always meaningful; use mean string jump.
     mean_ps = sum(s for s, _ in prev) / len(prev)
     mean_cs = sum(s for s, _ in cur) / len(cur)
     cost += 0.5 * abs(mean_ps - mean_cs)
-    del prev_by_midi_string
+    if len(prev) == 1 and len(cur) == 1:
+        ps, pf = prev[0]
+        cs, cf = cur[0]
+        # Hammer/pull/slide destinations have a weak attack — keep them on one string.
+        if legato and 1 <= interval <= 5:
+            if ps == cs and abs(pf - cf) <= 5:
+                cost -= 3.2
+            else:
+                cost += 2.8
+        elif ps == cs and abs(pf - cf) <= 3:
+            cost -= 0.45
+        else:
+            cost += 0.4 * abs(ps - cs)
     return cost
 
 
@@ -180,6 +191,7 @@ def assign_notes(
     groups = group_onsets(notes)
     placed: list[dict] = []
     prev: list[tuple[int, int]] | None = None
+    prev_midi: int | None = None
 
     for group in groups:
         playable = [n for n in group if candidates(int(n["midi"]), tuning, capo)]
@@ -203,8 +215,14 @@ def assign_notes(
             continue
 
         scored = []
+        legato = False
+        interval = 0
+        if len(playable) == 1 and prev is not None and prev_midi is not None:
+            interval = abs(int(playable[0]["midi"]) - prev_midi)
+            onset = playable[0].get("onset_ratio")
+            legato = onset is not None and float(onset) < 1.55
         for opt in options:
-            c = _assign_cost(opt, midis, pcs, hw) + _trans_cost(prev, opt)
+            c = _assign_cost(opt, midis, pcs, hw) + _trans_cost(prev, opt, legato=legato, interval=interval)
             # TabCNN / prior string hint on each note (optional).
             for n, (s, f) in zip(playable, opt):
                 hint = n.get("tabcnn")
@@ -219,6 +237,7 @@ def assign_notes(
         unsure = margin < 0.45
         span = _span_cost([f for _, f in best])
         prev = best
+        prev_midi = int(playable[0]["midi"]) if len(playable) == 1 else None
         for n, (s, f) in zip(playable, best):
             conf = float(n.get("confidence") or n.get("velocity") or 0.5)
             if unsure:

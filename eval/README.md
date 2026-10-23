@@ -13,7 +13,11 @@ Audio files stay out of the repo. After analyzing a song:
 separately by `eval/score.py` (`exact` vs `relative`).
 
 Synth clips (generated, not commercial recordings) — these are the Phase 2
-regression set (I–V–vi–IV, power-chord riff, relative-minor home, pentatonic solo):
+regression set (I–V–vi–IV, power-chord riff, relative-minor home, pentatonic
+solo, plus a guitar-like technique clip for bend / hammer / pull / slide /
+vibrato). `eval/score.py` reports technique precision/recall against timed
+events; a picked opening on the technique clip and the whole pentatonic solo
+must not be tagged as legato.
 
 ```bash
 .venv/bin/python eval/synth.py

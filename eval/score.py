@@ -60,6 +60,85 @@ def key_score(analysis: dict, expect: dict) -> dict:
     return {"exact": exact, "relative": relative, "got": f"{got_t} {got_m}"}
 
 
+TECH_TYPES = ("bend", "vibrato", "hammer", "pull", "slide")
+
+
+def _tech_type(t) -> str | None:
+    if isinstance(t, str):
+        return t if t in TECH_TYPES else None
+    if isinstance(t, dict):
+        k = t.get("type")
+        return k if k in TECH_TYPES else None
+    return None
+
+
+def technique_scores(pred_notes: list[dict], gt_notes: list[dict], *,
+                     events: list[dict] | None = None, clean_until: float | None = None,
+                     window: float = 0.28) -> dict:
+    """Match predicted technique tags to timed ground-truth events.
+
+    Empty `events` means the clip should have no techniques (e.g. a picked scale);
+    every predicted tag is then a false positive. `clean_until` counts tags that
+    landed on the opening picked region even when later events exist.
+    """
+    evs = list(events) if events is not None else []
+    if not evs:
+        for g in gt_notes:
+            for t in g.get("techniques") or []:
+                typ = _tech_type(t)
+                if typ:
+                    evs.append({"type": typ, "t": float(g["start"]), "midi": g.get("midi")})
+
+    pred: list[dict] = []
+    confs: list[float] = []
+    for n in pred_notes:
+        for t in n.get("techniques") or []:
+            typ = _tech_type(t)
+            if not typ:
+                continue
+            pred.append({"type": typ, "t": float(n["start"]), "midi": n.get("midi")})
+            confs.append(float(t.get("confidence") or 0.0))
+
+    per = {k: {"tp": 0, "fp": 0, "fn": 0} for k in TECH_TYPES}
+    used = [False] * len(pred)
+    tp = 0
+    for ev in evs:
+        best = None
+        for i, p in enumerate(pred):
+            if used[i] or p["type"] != ev["type"]:
+                continue
+            d = abs(p["t"] - float(ev["t"]))
+            if d <= window and (best is None or d < best[0]):
+                best = (d, i)
+        if best:
+            used[best[1]] = True
+            tp += 1
+            per[ev["type"]]["tp"] += 1
+        else:
+            per[ev["type"]]["fn"] += 1
+    fp = 0
+    for i, p in enumerate(pred):
+        if not used[i]:
+            fp += 1
+            per[p["type"]]["fp"] += 1
+    fn = len(evs) - tp
+    prec = 1.0 if (tp + fp) == 0 else tp / (tp + fp)
+    rec = 1.0 if (tp + fn) == 0 else tp / (tp + fn)
+    f1 = 0.0 if prec + rec == 0 else 2 * prec * rec / (prec + rec)
+    clean_fp = sum(1 for p in pred if clean_until is not None and p["t"] < clean_until)
+    return {
+        "precision": round(prec, 3),
+        "recall": round(rec, 3),
+        "f1": round(f1, 3),
+        "tp": tp, "fp": fp, "fn": fn,
+        "n_pred_tags": len(pred),
+        "n_gt": len(evs),
+        "clean_fp": clean_fp,
+        "mean_confidence": round(sum(confs) / len(confs), 3) if confs else None,
+        "per_type": {k: v for k, v in per.items() if v["tp"] or v["fp"] or v["fn"]},
+    }
+
+
 def tab_f1(pred_notes: list[dict], gt_notes: list[dict], window: float = 0.10) -> dict:
     used = [False] * len(gt_notes)
     tp = 0
@@ -97,6 +176,12 @@ def score_file(analysis_path: Path, ref: dict) -> dict:
         "bpm_got": a.get("tempo", {}).get("bpm"),
         "bpm_exp": ref["bpm"],
         "tab": tab_f1((a.get("tab") or {}).get("notes") or [], ref.get("notes") or []),
+        "techniques": technique_scores(
+            (a.get("tab") or {}).get("notes") or [],
+            ref.get("notes") or [],
+            events=ref.get("techniques") or [],
+            clean_until=ref.get("clean_until"),
+        ),
         "timings": a.get("timings"),
         "tab_stats": (a.get("tab") or {}).get("stats"),
         "relative_adjusted": a.get("key", {}).get("relative_adjusted"),

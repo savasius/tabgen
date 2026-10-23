@@ -95,9 +95,9 @@ def _tech_suffix(note: dict) -> str:
             qt = int(next((t.get("quarter_tones") or 2) for t in note["techniques"] if t["type"] == "bend"))
             bits.append(f"b ({qt})")
         elif k == "vibrato":
-            bits.append("v")
+            bits.append("v")  # alphaTab has no '~' token; `v` draws the wave
         elif k == "slide":
-            bits.append("ss")
+            bits.append("sl")  # legato slide (line); '/' is not a valid alphaTex tag
         elif k == "hammer":
             bits.append("h")
         elif k == "pull":
@@ -315,6 +315,15 @@ def to_musicxml(
                             SubElement(tech, "hammer-on", type="start", number="1")
                         elif t["type"] == "pull":
                             SubElement(tech, "pull-off", type="start", number="1")
+                        elif t["type"] == "slide":
+                            SubElement(tech, "slide", type="start", number="1")
+                        elif t["type"] == "vibrato":
+                            orns = notations.find("ornaments")
+                            if orns is None:
+                                orns = SubElement(notations, "ornaments")
+                            SubElement(orns, "wavy-line", type="start")
+                        elif t["type"] == "palmMute":
+                            SubElement(tech, "other-technical").text = "palm mute"
                 i += dur
             else:
                 nxt = nslots

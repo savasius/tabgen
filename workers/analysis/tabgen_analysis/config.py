@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-PIPELINE_VERSION = "p2.1-demucs6s-bt1.1-aio3.1-lvc1.1-skey-bp-tabcnn"
+PIPELINE_VERSION = "p2.2-demucs6s-bt1.1-aio3.1-lvc1.1-skey-bp-tabcnn"
 
 DATA_DIR = Path(os.environ.get("TABGEN_DATA_DIR", Path(__file__).resolve().parents[3] / "data"))
 

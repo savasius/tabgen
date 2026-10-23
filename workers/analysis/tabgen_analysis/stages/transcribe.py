@@ -18,7 +18,7 @@ from ..config import models_dir
 
 log = logging.getLogger(__name__)
 
-MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v2"
+MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v4"
 
 TABCNN_URL = "https://huggingface.co/cstr/tabcnn-onnx/resolve/main/tabcnn-gpfx.onnx"
 TABCNN_SHA256 = "8d9ce59157bdab37fb4816d32d7f29f3da0cdbf3c7876707c819af4d1f88e6b7"
@@ -238,11 +238,12 @@ def attach_tabcnn(notes: list[dict], audio_path: Path, tuning: list[int]) -> dic
     return meta
 
 
-def clean_notes(notes: list[dict], onset_merge: float = 0.045) -> list[dict]:
-    """Merge overlapping same-MIDI events and drop quieter octave doubles.
+def clean_notes(notes: list[dict], onset_merge: float = 0.045,
+                harmonic_window: float = 0.10) -> list[dict]:
+    """Merge overlapping same-MIDI events and drop quieter harmonic leftovers.
 
-    Basic Pitch often emits a fundamental plus its octave (or a split note).
-    Keeping both inflates false-positive tab notes on every strum.
+    Basic Pitch often emits a fundamental plus its octave, 12th, or a quiet
+    high ghost a few tens of ms later. Keeping those inflates false-positive tabs.
     """
     if not notes:
         return notes
@@ -263,7 +264,7 @@ def clean_notes(notes: list[dict], onset_merge: float = 0.045) -> list[dict]:
 
     groups: list[list[dict]] = []
     for n in merged:
-        if groups and float(n["start"]) - float(groups[-1][0]["start"]) <= onset_merge:
+        if groups and float(n["start"]) - float(groups[-1][0]["start"]) <= harmonic_window:
             groups[-1].append(n)
         else:
             groups.append([n])
@@ -275,13 +276,21 @@ def clean_notes(notes: list[dict], onset_merge: float = 0.045) -> list[dict]:
                 if i >= j:
                     continue
                 ma, mb = int(a["midi"]), int(b["midi"])
-                if abs(ma - mb) not in (12, 24):
-                    continue
                 va = float(a.get("velocity") or a.get("confidence") or 0)
                 vb = float(b.get("velocity") or b.get("confidence") or 0)
-                higher = i if ma > mb else j
-                quieter = i if va < vb else j
-                drop.add(higher if abs(va - vb) < 0.12 else quieter)
+                # Octave, double-octave, or 12th (3rd harmonic).
+                if abs(ma - mb) in (12, 19, 24):
+                    higher = i if ma > mb else j
+                    quieter = i if va < vb else j
+                    drop.add(higher if abs(va - vb) < 0.12 else quieter)
+                    continue
+                # Quiet high ghost sitting on a louder lower note.
+                if abs(ma - mb) >= 12:
+                    higher, lower = (i, j) if ma > mb else (j, i)
+                    hi_v = float(g[higher].get("velocity") or g[higher].get("confidence") or 0)
+                    lo_v = float(g[lower].get("velocity") or g[lower].get("confidence") or 0)
+                    if hi_v <= 0.55 * lo_v + 0.02:
+                        drop.add(higher)
         out.extend(n for i, n in enumerate(g) if i not in drop)
     out.sort(key=lambda n: (float(n["start"]), int(n["midi"])))
     return out

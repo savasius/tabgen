@@ -374,7 +374,7 @@ def reconcile_relative_key(key: dict, chords: list[dict]) -> dict:
     s_det = scores.get((tonic, mode), (0.0, "skey"))[0]
     out["relative_scores"] = {f"{n} {m}": round(v[0], 2) for (n, m), v in scores.items()}
     best_key, (best_s, best_src) = max(scores.items(), key=lambda kv: kv[1][0])
-    if best_key != (tonic, mode) and best_s > s_det * 1.08 and best_s > 0:
+    if best_key != (tonic, mode) and best_s > s_det * 1.05 and best_s > 0:
         out["tonic"], out["mode"] = best_key
         out["relative_adjusted"] = True
         out["key_source"] = best_src

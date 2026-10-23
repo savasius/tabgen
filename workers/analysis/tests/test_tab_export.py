@@ -39,8 +39,39 @@ def test_alphatex_dedupes_repeated_hammer_tokens():
     assert "{h}" in tex
 
 
+def test_alphatex_slide_and_vibrato_tokens():
+    notes = [
+        {"start": 0.0, "end": 0.4, "midi": 64, "string": 1, "fret": 5,
+         "techniques": [{"type": "slide", "source": "contour", "confidence": 0.7}]},
+        {"start": 0.5, "end": 1.0, "midi": 67, "string": 1, "fret": 8,
+         "techniques": [{"type": "vibrato", "source": "contour", "confidence": 0.6}]},
+        {"start": 1.0, "end": 1.4, "midi": 65, "string": 1, "fret": 6,
+         "techniques": [{"type": "pull", "source": "legato", "confidence": 0.6}]},
+    ]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0, title="x", bpm=120)
+    assert "{sl}" in tex
+    assert "{v}" in tex
+    assert "{p}" in tex
+    assert "{ss}" not in tex
+    assert "{~" not in tex
+    assert "{/}" not in tex
+
+
 def test_musicxml_has_tab_clef_and_fret():
     xml = to_musicxml(NOTES, BARS, BEATS, 2.0, title="Solo", bpm=120)
     assert "<sign>TAB</sign>" in xml
     assert "<fret>8</fret>" in xml
     assert "<string>1</string>" in xml
+    assert "<bend>" in xml
+
+
+def test_musicxml_slide_and_vibrato():
+    notes = [
+        {"start": 0.0, "end": 0.4, "midi": 64, "string": 1, "fret": 5,
+         "techniques": [{"type": "slide", "source": "contour"}]},
+        {"start": 0.5, "end": 1.0, "midi": 67, "string": 1, "fret": 8,
+         "techniques": [{"type": "vibrato", "source": "contour"}]},
+    ]
+    xml = to_musicxml(notes, BARS, BEATS, 2.0, title="x", bpm=120)
+    assert 'slide type="start"' in xml or "<slide" in xml
+    assert "wavy-line" in xml

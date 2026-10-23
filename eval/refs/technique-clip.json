@@ -1,0 +1,161 @@
+{
+  "id": "technique-clip",
+  "title": "Guitar techniques (picked, H/P, slide, bend, vibrato)",
+  "wav": "/workspace/data/eval/technique-clip.wav",
+  "bpm": 100,
+  "key": {
+    "tonic": "A",
+    "mode": "minor"
+  },
+  "expect_basic": "Am",
+  "chords": [
+    {
+      "start": 0,
+      "end": 5.7,
+      "label": "A:min"
+    }
+  ],
+  "beats": [
+    0.0,
+    0.6,
+    1.2,
+    1.8,
+    2.4,
+    3.0,
+    3.6,
+    4.2,
+    4.8,
+    5.4
+  ],
+  "notes": [
+    {
+      "start": 0.06,
+      "end": 0.24,
+      "midi": 57
+    },
+    {
+      "start": 0.36,
+      "end": 0.54,
+      "midi": 60
+    },
+    {
+      "start": 0.66,
+      "end": 0.84,
+      "midi": 62
+    },
+    {
+      "start": 0.96,
+      "end": 1.14,
+      "midi": 64
+    },
+    {
+      "start": 1.4,
+      "end": 1.76,
+      "midi": 57,
+      "techniques": [
+        {
+          "type": "hammer"
+        }
+      ]
+    },
+    {
+      "start": 1.56,
+      "end": 1.92,
+      "midi": 60,
+      "techniques": [
+        {
+          "type": "hammer"
+        }
+      ]
+    },
+    {
+      "start": 2.1,
+      "end": 2.46,
+      "midi": 64,
+      "techniques": [
+        {
+          "type": "pull"
+        }
+      ]
+    },
+    {
+      "start": 2.26,
+      "end": 2.62,
+      "midi": 62,
+      "techniques": [
+        {
+          "type": "pull"
+        }
+      ]
+    },
+    {
+      "start": 2.8,
+      "end": 3.22,
+      "midi": 60,
+      "techniques": [
+        {
+          "type": "slide"
+        }
+      ]
+    },
+    {
+      "start": 3.1,
+      "end": 3.48,
+      "midi": 64,
+      "techniques": [
+        {
+          "type": "slide"
+        }
+      ]
+    },
+    {
+      "start": 3.7,
+      "end": 4.4,
+      "midi": 62,
+      "techniques": [
+        {
+          "type": "bend"
+        }
+      ]
+    },
+    {
+      "start": 4.55,
+      "end": 5.5,
+      "midi": 57,
+      "techniques": [
+        {
+          "type": "vibrato"
+        }
+      ]
+    }
+  ],
+  "duration": 5.7,
+  "techniques": [
+    {
+      "type": "hammer",
+      "t": 1.56,
+      "midi": 60
+    },
+    {
+      "type": "pull",
+      "t": 2.26,
+      "midi": 62
+    },
+    {
+      "type": "slide",
+      "t": 2.8,
+      "midi": 60
+    },
+    {
+      "type": "bend",
+      "t": 3.7,
+      "midi": 62
+    },
+    {
+      "type": "vibrato",
+      "t": 4.55,
+      "midi": 57
+    }
+  ],
+  "clean_until": 1.25
+}

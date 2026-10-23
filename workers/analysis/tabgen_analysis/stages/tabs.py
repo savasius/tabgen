@@ -124,6 +124,8 @@ def build_tab(
     notes_in = list(raw.get("notes") or [])
     tuning, tuning_guess = detect_tuning(notes_in)
     chord_at = _chord_at_factory(chords)
+    audio = techniques.load_audio(guitar_path)
+    techniques.attach_onsets(notes_in, audio)
     assigned = fingering.assign_notes(
         notes_in, tuning=tuning, capo=capo,
         chord_at=chord_at, hint_weight_at=_hint_weight_factory(sections),
@@ -135,7 +137,8 @@ def build_tab(
         assigned = _chord_shape_fallback(chords, bars, tuning)
 
     cents = _centroids(guitar_path, assigned)
-    techniques.annotate(assigned, centroids=cents, solo_at=_solo_at_factory(sections))
+    techniques.annotate(assigned, centroids=cents, solo_at=_solo_at_factory(sections),
+                        audio_path=guitar_path, audio=audio)
 
     playable = [n for n in assigned if n.get("string") is not None]
     playable = tab_export.quantize_notes(playable, beats, duration)
@@ -149,10 +152,17 @@ def build_tab(
     xml = tab_export.to_musicxml(playable, bars, beats, duration, title=title, bpm=bpm, tuning=names, ts=ts)
 
     n_low = sum(1 for n in playable if n.get("low_confidence"))
+    tech_counts: dict[str, int] = {}
+    tech_conf: dict[str, list[float]] = {}
+    for n in playable:
+        for t in n.get("techniques") or []:
+            kind = t["type"]
+            tech_counts[kind] = tech_counts.get(kind, 0) + 1
+            tech_conf.setdefault(kind, []).append(float(t.get("confidence") or 0.0))
     # Drop bulky contour arrays from the API payload; keep a compact flag.
     compact = []
     for n in playable:
-        compact.append({
+        row = {
             "start": n["start"], "end": n["end"],
             "qstart": n.get("qstart"), "qend": n.get("qend"),
             "midi": n["midi"], "string": n["string"], "fret": n["fret"],
@@ -160,7 +170,10 @@ def build_tab(
             "low_confidence": bool(n.get("low_confidence")),
             "techniques": n.get("techniques") or [],
             "source": n.get("source"),
-        })
+        }
+        if n.get("onset_ratio") is not None:
+            row["onset_ratio"] = n["onset_ratio"]
+        compact.append(row)
 
     return {
         "tuning": names,
@@ -179,6 +192,8 @@ def build_tab(
             "n_low_confidence": n_low,
             "fallback": fallback,
             "tabcnn_matched": (raw.get("tabcnn") or {}).get("n_notes_matched"),
+            "techniques": tech_counts,
+            "technique_confidence": {k: round(sum(v) / len(v), 3) for k, v in tech_conf.items()},
         },
         "musicxml": xml,
         "error": None,

@@ -13,6 +13,27 @@ def test_clean_notes_merges_split_same_midi():
     assert out[0]["velocity"] == 0.7
 
 
+def test_clean_notes_drops_quiet_high_ghost():
+    notes = [
+        {"start": 0.00, "end": 0.80, "midi": 57, "velocity": 0.83, "confidence": 0.83},
+        {"start": 0.07, "end": 0.80, "midi": 85, "velocity": 0.35, "confidence": 0.35},
+    ]
+    out = clean_notes(notes)
+    assert {n["midi"] for n in out} == {57}
+
+
+def test_clean_notes_drops_quieter_twelfth():
+    notes = [
+        {"start": 0.00, "end": 0.40, "midi": 40, "velocity": 0.85, "confidence": 0.85},  # E2
+        {"start": 0.01, "end": 0.40, "midi": 59, "velocity": 0.35, "confidence": 0.35},  # B3 = +19
+        {"start": 0.01, "end": 0.40, "midi": 47, "velocity": 0.7, "confidence": 0.7},   # B2
+    ]
+    out = clean_notes(notes)
+    midis = {n["midi"] for n in out}
+    assert 40 in midis and 47 in midis
+    assert 59 not in midis
+
+
 def test_clean_notes_drops_quieter_octave():
     notes = [
         {"start": 0.00, "end": 0.40, "midi": 52, "velocity": 0.8, "confidence": 0.8},  # E3

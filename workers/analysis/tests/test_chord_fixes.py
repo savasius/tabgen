@@ -42,6 +42,22 @@ def test_relative_minor_wins_when_it_is_the_home_chord():
     assert key["tonic"] == "F#" and key["mode"] == "minor" and key["relative_adjusted"]
 
 
+def test_relative_minor_wins_when_skey_picks_the_subdominant_major():
+    # F#m–A–E–B loop; S-KEY sometimes reports E major (a chord in the loop).
+    chords = (
+        [{"start": 0, "end": 2.7, "label": "F#:min"}]
+        + [{"start": 2.7, "end": 5.4, "label": "A:maj"}]
+        + [{"start": 5.4, "end": 8.1, "label": "E:maj"}]
+        + [{"start": 8.1, "end": 10.9, "label": "B:maj"}]
+        + [{"start": 10.9, "end": 13.6, "label": "F#:min"}]
+        + [{"start": 13.6, "end": 16.3, "label": "A:maj"}]
+        + [{"start": 16.3, "end": 19.0, "label": "E:maj"}]
+        + [{"start": 19.0, "end": 21.8, "label": "B:maj"}]
+    )
+    key = post.reconcile_relative_key({"tonic": "E", "mode": "major", "confidence": 0.82}, chords)
+    assert key["tonic"] == "F#" and key["mode"] == "minor"
+
+
 def test_relative_does_not_flip_a_clear_major_loop():
     # I–V–vi–IV in B: opening I, plenty of B major.
     chords = []

@@ -108,5 +108,7 @@
       "midi": 69
     }
   ],
-  "duration": 5.1
+  "duration": 5.1,
+  "techniques": [],
+  "clean_until": 5.1
 }

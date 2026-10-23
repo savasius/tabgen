@@ -53,6 +53,27 @@ def test_drop_d_when_notes_below_e2():
     assert guess == "drop_d" and t[0] == 38
 
 
+def test_legato_dest_stays_on_same_string():
+    notes = [
+        {"start": 0.00, "end": 0.36, "midi": 57, "velocity": 0.8, "confidence": 0.8, "onset_ratio": 4.0},
+        {"start": 0.16, "end": 0.50, "midi": 60, "velocity": 0.4, "confidence": 0.7, "onset_ratio": 1.1},
+    ]
+    out = assign_notes(notes)
+    assert out[0]["string"] == out[1]["string"]
+    assert abs(out[1]["fret"] - out[0]["fret"]) == 3
+
+
+def test_stepwise_melody_prefers_same_string():
+    # Open-E then F and G — should stay on high E (string 1) rather than hopping.
+    notes = [
+        {"start": 0.00, "end": 0.20, "midi": 64, "velocity": 0.8, "confidence": 0.8},
+        {"start": 0.25, "end": 0.45, "midi": 65, "velocity": 0.8, "confidence": 0.8},
+        {"start": 0.50, "end": 0.70, "midi": 67, "velocity": 0.8, "confidence": 0.8},
+    ]
+    out = assign_notes(notes)
+    assert len({n["string"] for n in out}) == 1
+
+
 def test_chord_hint_prefers_chord_tones_in_rhythm():
     # C3 sounded during C major should land on a C-major-friendly fret, not a random inversion far up.
     notes = [{"start": 0.0, "end": 0.5, "midi": 48, "velocity": 0.7, "confidence": 0.7}]  # C3
