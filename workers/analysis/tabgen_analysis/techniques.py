@@ -14,6 +14,11 @@ import numpy as np
 
 # Basic Pitch contour bins are 1/3 semitone.
 BINS_PER_SEMITONE = 3.0
+IN_NOTE_BENDS = False
+# Destination counts as unpicked (hammer/pull/slide) below this attack ratio. Was 1.55, which
+# flagged 20% of picked notes on clean IDMT licks and 35% on distorted ones; 1.1 flags 1-2%
+# while still catching about half the unpicked notes (eval/technique_bench.py).
+LEGATO_ONSET = 1.1
 TECH_KINDS = ("bend", "vibrato", "hammer", "pull", "slide", "palmMute")
 
 LEGEND = {
@@ -180,7 +185,9 @@ def _vib_stats(cents: np.ndarray, duration: float) -> tuple[float, float, float]
         return None
     hz = 1.0 / max(j * hop, 1e-4)
     cycles = duration * hz
-    if cycles < 1.8 or not (3.3 <= hz <= 8.3):
+    # Guitar vibrato on IDMT licks: 3.8-6.2 Hz, 15-40 cents. Faster wobble is pick/fret noise,
+    # bigger swings are pitch-tracker octave/neighbour jumps (both were most false positives).
+    if cycles < 1.8 or not (3.3 <= hz <= 6.8) or amp > 55:
         return None
     return hz, amp, peak
 
@@ -219,9 +226,22 @@ def classify_contour(bends: list[int] | None, duration: float,
             corr = 0.0
     else:
         corr = 0.0
-    directed = abs(net) >= 70 or (abs(rise) >= 90 and abs(net) >= 45)
-    monotonic = abs(corr) >= 0.45
-    if directed and monotonic and duration >= 0.09:
+    # In-note bends: on IDMT licks the old rule (|net| >= 70 c, either direction) was 0/100
+    # correct — falling decay and the next note bleeding into the tail look like bends.
+    # Require an upward rise that reaches its plateau early and holds it, ignoring the tail.
+    tail = max(1, int(round(n * 0.06 / max(duration, 1e-3))))
+    body = sm[: max(5, n - tail)]
+    b_start = float(np.median(body[: max(2, len(body) // 5)]))
+    b_peak = float(np.max(body))
+    b_rise = b_peak - b_start
+    held = float(np.mean(body >= b_start + 0.7 * b_rise)) if b_rise > 0 else 0.0
+    reach = int(np.argmax(body >= b_start + 0.7 * b_rise)) / max(1, len(body)) if b_rise > 0 else 1.0
+    # Even this was 0/13 on IDMT; Basic Pitch splits real bends (merge_split_bends catches
+    # those). Kept behind a flag for experiments, off in the pipeline.
+    directed = IN_NOTE_BENDS and b_rise >= 75 and held >= 0.25 and reach <= 0.75 and duration >= 0.15
+    net, rise = b_rise, b_rise
+    monotonic = True
+    if directed and monotonic:
         cents_amt = net if abs(net) >= abs(rise) * 0.6 else rise
         # If vibrato is strong and net shift is small-ish, skip bend.
         if vib and abs(net) < 90 and vib[2] > 0.45:
@@ -289,7 +309,7 @@ def link_legato(notes: list[dict], audio: _Audio | None = None) -> None:
             kinds_a = {t["type"] for t in a.get("techniques") or []}
             kinds_b = {t["type"] for t in b.get("techniques") or []}
             onset_b = b.get("onset_ratio")
-            legato = None if onset_b is None else float(onset_b) < 1.55
+            legato = None if onset_b is None else float(onset_b) < LEGATO_ONSET
             va = float(a.get("velocity") or a.get("confidence") or 0.5)
             vb = float(b.get("velocity") or b.get("confidence") or 0.5)
             quieter = vb <= 0.82 * va + 0.02
@@ -297,8 +317,12 @@ def link_legato(notes: list[dict], audio: _Audio | None = None) -> None:
             cover = _glide_coverage(cents_a, df * 100.0)
             abs_df = abs(df)
 
-            hammerish = 1 <= abs_df <= 3 and gap <= 0.032
+            glide = glide_cents(a, b)
+            # A hammer/pull lands on its pitch in one frame; a measurable glide is a slide.
+            hammerish = 1 <= abs_df <= 3 and gap <= 0.032 and glide < GLIDE_SLIDE and not a.get("slide_hint")
             slideish = abs_df >= 2 and gap <= 0.05
+            if glide >= GLIDE_SLIDE:
+                cover = max(cover, min(1.0, glide / (abs_df * 100.0)) + 0.35)
 
             is_hp = False
             # Abutting notes where the dest is itself a bend: Basic Pitch split one bent note.
@@ -306,7 +330,7 @@ def link_legato(notes: list[dict], audio: _Audio | None = None) -> None:
             if hammerish and "bend" not in kinds_a and not split_bend:
                 if legato is True:
                     is_hp = True
-                    conf = 0.55 + 0.2 * (1.55 - float(onset_b)) / 1.55
+                    conf = 0.55 + 0.2 * (LEGATO_ONSET - float(onset_b)) / LEGATO_ONSET
                     if quieter:
                         conf += 0.1
                     if gap <= 0.01:
@@ -326,13 +350,15 @@ def link_legato(notes: list[dict], audio: _Audio | None = None) -> None:
 
             is_slide = False
             conf_s = 0.0
-            if slideish and not is_hp:
+            hint = a.get("slide_hint")
+            if hint and int(hint["to_midi"]) == int(b["midi"]) and gap <= 0.05:
+                is_slide = True
+                conf_s = 0.55 + min(0.35, float(hint["glide_cents"]) / 600.0)
+                cover = max(cover, 0.35)
+            elif slideish and not is_hp:
                 if cover >= 0.35:
                     is_slide = True
                     conf_s = 0.5 + 0.35 * min(cover, 1.0)
-                elif legato is True and abs_df >= 3:
-                    is_slide = True
-                    conf_s = 0.48
                 elif legato is None and cover >= 0.25 and abs_df >= 3:
                     is_slide = True
                     conf_s = 0.4
@@ -379,7 +405,10 @@ def annotate(notes: list[dict], centroids: dict[int, float] | None = None, solo_
         dur = float(n["end"]) - float(n["start"])
         cents = _contour_cents(n, audio)
         n["_cents"] = cents
-        n["techniques"].extend(classify_contour(n.get("bends"), dur, cents=cents))
+        found = classify_contour(n.get("bends"), dur, cents=cents)
+        if n.get("merged_bend"):  # bend already measured across the split; keep vibrato only
+            found = [t for t in found if t["type"] != "bend"]
+        n["techniques"].extend(found)
         if n["techniques"] and min((t.get("confidence") or 0.5) for t in n["techniques"]) < 0.4:
             n["low_confidence"] = True
 
@@ -393,3 +422,128 @@ def annotate(notes: list[dict], centroids: dict[int, float] | None = None, solo_
         if n.get("bends") and len(n["bends"]) > 24:
             n["bends"] = n["bends"][:: max(1, len(n["bends"]) // 16)][:16]
     return notes
+
+
+# ---------------------------------------------------------------- split bends / glides
+#
+# Basic Pitch writes a bent note as two notes: the fretted pitch, then the target pitch
+# starting where the bend arrives, with no new pick attack. Left alone that pair became a
+# fake hammer-on (IDMT licks: bend precision 0.03). A hammer lands on its pitch in one frame;
+# a bend or slide glides into it. `glide_cents` measures that approach on the contour.
+
+CONTOUR_FPS = 86.0  # Basic Pitch contour frames per second
+GLIDE_SLIDE = 60.0  # cents of approach that rule out a hammer/pull
+
+
+def _rel(bends: list[int] | None) -> np.ndarray:
+    if not bends:
+        return np.zeros(0)
+    x = np.asarray(bends, float)
+    return x - float(np.median(x))
+
+
+def glide_cents(a: dict, b: dict, window: float = 0.07) -> float:
+    """Pitch approach from a's tail into b's head, in cents, positive toward b's pitch.
+
+    tail: how far a's contour moves toward b over its last `window`;
+    head: how far b starts from its own steady pitch on a's side.
+    ~0 for a hammer-on/pull-off or a new pick; tens to hundreds of cents for a bend/slide.
+    """
+    k = max(2, int(round(window * CONTOUR_FPS)))
+    direction = 1.0 if int(b["midi"]) >= int(a["midi"]) else -1.0
+    ra, rb = _rel(a.get("bends")), _rel(b.get("bends"))
+    tail = head = 0.0
+    if len(ra) >= k + 2:
+        tail = direction * float(np.median(ra[-2:]) - np.median(ra[-k - 2:-k]))
+    if len(rb) >= k + 2:
+        steady = float(np.median(rb[k:k + 3]))
+        start = float(np.min(rb[:k])) if direction > 0 else float(np.max(rb[:k]))
+        head = direction * (steady - start)
+    return (max(0.0, tail) + max(0.0, head)) * 100.0 / BINS_PER_SEMITONE
+
+
+def contour_ramps(a: dict, b: dict) -> tuple[int, int]:
+    """Frames a's tail spends ≥1/3 semitone toward b, and frames b's head spends short of b."""
+    d = 1 if int(b["midi"]) >= int(a["midi"]) else -1
+    ra, rb = _rel(a.get("bends")), _rel(b.get("bends"))
+    ta = 0
+    for v in ra[::-1]:
+        if d * v < 1:
+            break
+        ta += 1
+    hb = 0
+    for v in rb:
+        if -d * v < 1:
+            break
+        hb += 1
+    return ta, hb
+
+
+def _concurrent(n: dict, notes: list[dict], window: float = 0.04) -> bool:
+    t = float(n["start"])
+    return any(m is not n and abs(float(m["start"]) - t) <= window for m in notes)
+
+
+def merge_split_bends(notes: list[dict], audio: _Audio | None = None, *,
+                      max_gap: float = 0.035, max_up: int = 3, min_glide: float = 40.0,
+                      max_onset: float = 1.6) -> list[dict]:
+    """Fold "note + unpicked higher note" pairs that glide together into one bent note.
+
+    Runs before fingering on onset-sorted notes. The kept note gets a `bend` technique with
+    the measured target (quarter tones) and, when the pitch returns unpicked, a release.
+    """
+    if audio is not None:
+        attach_onsets(notes, audio)
+    ordered = sorted(notes, key=lambda n: float(n["start"]))
+    removed: set[int] = set()
+    for i, a in enumerate(ordered):
+        if i in removed or _concurrent(a, ordered):
+            continue
+        # follow the chain a -> b (-> c release)
+        j = i + 1
+        while j < len(ordered) and j in removed:
+            j += 1
+        if j >= len(ordered):
+            continue
+        b = ordered[j]
+        if _concurrent(b, ordered):
+            continue
+        up = int(b["midi"]) - int(a["midi"])
+        gap = float(b["start"]) - float(a["end"])
+        onset_b = b.get("onset_ratio")
+        if not (1 <= abs(up) <= 7 and -0.12 <= gap <= max_gap):
+            continue
+        if onset_b is not None and float(onset_b) >= max_onset:
+            continue
+        g = glide_cents(a, b)
+        if g < min_glide:
+            continue  # lands in one frame: hammer/pull (or a pick we missed), link_legato decides
+        # Bend vs slide (fitted on IDMT-SMT-Guitar licks, see eval/technique_bench.py):
+        # bends rise 1-2 semitones and ramp over several frames; slides jump fret-by-fret in
+        # 1-2 frames, go 3+ semitones, or fall.
+        _ta, ramp_b = contour_ramps(a, b)
+        is_bend = up == 1 or (up == 2 and ramp_b >= 3)
+        if not is_bend or up > max_up:
+            a["slide_hint"] = {"to_midi": int(b["midi"]), "glide_cents": round(g, 1)}
+            continue
+        qt = 2 * up
+        tag = {"type": "bend", "source": "split-contour", "cents": float(100 * up),
+               "quarter_tones": qt, "glide_cents": round(g, 1),
+               "confidence": round(float(np.clip(0.45 + g / 300.0, 0.45, 0.9)), 3)}
+        a["end"] = max(float(a["end"]), float(b["end"]))
+        removed.add(j)
+        # release: c back at a's pitch, unpicked, right after b
+        k = j + 1
+        while k < len(ordered) and k in removed:
+            k += 1
+        if k < len(ordered):
+            c = ordered[k]
+            onset_c = c.get("onset_ratio")
+            if (int(c["midi"]) == int(a["midi"]) and float(c["start"]) - float(b["end"]) <= max_gap
+                    and (onset_c is None or float(onset_c) < max_onset) and not _concurrent(c, ordered)):
+                tag["release"] = True
+                a["end"] = max(float(a["end"]), float(c["end"]))
+                removed.add(k)
+        a.setdefault("techniques", []).append(tag)
+        a["merged_bend"] = True
+    return [n for i, n in enumerate(ordered) if i not in removed]
