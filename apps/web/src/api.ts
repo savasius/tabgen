@@ -81,6 +81,7 @@ export interface Analysis {
   guitar?: GuitarInfo
   audio?: { mix: string; original: string; guitar: string }
   warnings?: { code: string; message: string }[]
+  stems?: Partial<Record<'guitar' | 'vocals' | 'bass' | 'drums' | 'piano' | 'other' | 'harmonic', boolean>>
   models: Record<string, string>
   timings: Record<string, number>
 }
@@ -131,6 +132,11 @@ export const api = {
     fetch(`${BASE}/v1/analyses/${id}/reanalyze`, { method: 'POST' }).then(json<Job>),
   audioUrl: (id: string, stem: AudioStem = 'mix') =>
     `${BASE}/v1/analyses/${id}/audio${stem === 'mix' ? '' : `?stem=${encodeURIComponent(stem)}`}`,
+  guitarStemUrl: (id: string) => `${BASE}/v1/analyses/${id}/stems/guitar`,
+  guitarStemUrls: (id: string) => [
+    `${BASE}/v1/analyses/${id}/audio?stem=guitar`,
+    `${BASE}/v1/analyses/${id}/stems/guitar`,
+  ],
   musicxmlUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/musicxml`,
   alphatexUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/alphatex`,
 }

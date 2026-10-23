@@ -126,6 +126,12 @@ function SongChrome() {
           {reErr && <span className="text-destructive">{reErr}</span>}
         </div>
       )}
+      {a.guitar?.warning && (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
+          {t('song.guitarWarning')}
+          {a.guitar.source ? <span className="text-muted-foreground"> ({a.guitar.source})</span> : null}
+        </div>
+      )}
 
       <nav className="flex gap-1 rounded-xl bg-secondary p-1">
         {[
@@ -149,7 +155,8 @@ function SongChrome() {
         ))}
       </nav>
 
-      <audio ref={s.audioRef} src={api.audioUrl(a.id)} preload="auto" className="hidden" />
+      <audio ref={s.audioRef} src={api.audioUrl(a.id)} preload="auto" className="hidden" data-testid="mix-audio" />
+      <audio ref={s.guitarRef} src={s.guitarUrl ?? undefined} preload="auto" className="hidden" data-testid="guitar-audio" />
       {s.mode === 'youtube' && a.meta.youtube_id && <div className="yt-frame mx-auto hidden max-w-lg md:block" ref={s.ytMount} />}
       <div
         ref={s.tabHost}
@@ -349,6 +356,7 @@ export function ChordsView() {
           soundSource={s.soundSource}
           onSoundSource={s.setSoundSource}
           tabAvailable={s.tabAvailable}
+          guitarAvailable={s.guitarAvailable}
         />
         <div className="mt-2 flex flex-wrap gap-2">
           <Button size="sm" variant={s.pendingA !== null ? 'default' : 'outline'} onClick={setLoopPoint}>

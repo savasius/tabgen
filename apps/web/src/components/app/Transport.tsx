@@ -25,6 +25,7 @@ export function Transport({
   soundSource,
   onSoundSource,
   tabAvailable,
+  guitarAvailable,
 }: {
   time: number;
   duration: number;
@@ -42,8 +43,14 @@ export function Transport({
   soundSource?: SoundSource;
   onSoundSource?: (s: SoundSource) => void;
   tabAvailable?: boolean;
+  guitarAvailable?: boolean;
 }) {
   const t = useT();
+  const hint = soundSource === "guitar"
+    ? t("player.soundGuitarHint")
+    : soundSource === "tab"
+      ? t("player.soundTabHint")
+      : t("player.soundOriginalHint");
   return (
     <div className="rounded-2xl border border-border bg-card/90 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 flex items-center gap-3">
@@ -73,23 +80,6 @@ export function Transport({
             <span className="ml-1 text-lg font-semibold tabular">{Math.ceil(counting)}</span>
           )}
         </div>
-        {onSoundSource && soundSource && (
-          <div className="flex items-center gap-2" data-testid="sound-source">
-            <Guitar className="size-3.5 text-muted-foreground" />
-            <Segmented
-              size="sm"
-              value={soundSource}
-              onChange={(v) => {
-                if (v === "tab" && !tabAvailable) return
-                onSoundSource(v)
-              }}
-              options={[
-                { value: "original" satisfies SoundSource, label: t("player.soundOriginal") },
-                { value: "tab", label: t("player.soundTab"), hint: tabAvailable ? t("player.soundTabHint") : t("tab.empty") },
-              ]}
-            />
-          </div>
-        )}
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <Gauge className="size-3.5" />
           {t("player.speed")}
@@ -118,6 +108,28 @@ export function Transport({
           <span className="text-xs text-muted-foreground">{t("player.loopSet")}</span>
         )}
       </div>
+      {onSoundSource && soundSource && (
+        <div className="mt-2 flex flex-col gap-1" data-testid="sound-source" data-listen={soundSource}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Guitar className="size-3.5 shrink-0 text-muted-foreground" />
+            <Segmented
+              size="sm"
+              value={soundSource}
+              onChange={(v) => {
+                if (v === "tab" && !tabAvailable) return
+                if (v === "guitar" && !guitarAvailable) return
+                onSoundSource(v)
+              }}
+              options={[
+                { value: "original" satisfies SoundSource, label: t("player.soundOriginal"), hint: t("player.soundOriginalHint"), testId: "listen-original" },
+                { value: "guitar", label: t("player.soundGuitar"), hint: t("player.soundGuitarHint"), testId: "listen-guitar", disabled: !guitarAvailable },
+                { value: "tab", label: t("player.soundTab"), hint: t("player.soundTabHint"), testId: "listen-tab", disabled: !tabAvailable },
+              ]}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground" data-testid="listen-hint">{hint}</p>
+        </div>
+      )}
     </div>
   );
 }

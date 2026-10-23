@@ -3,6 +3,7 @@ import type { Analysis } from '@/api'
 import { useApp } from '@/lib/store'
 import { beatAt } from '@/lib/time'
 import { createTabGuitarPlayer } from '@/lib/tab-player'
+import { guitarStemCandidates, hasIsolatedGuitar, preferredListenMode, resolveGuitarStemUrl } from '@/lib/listen'
 import { bestCapo, capoSuggestions, spellingForKey, type Level } from '@/music/chords'
 import { audioPlayer, countIn, youtubePlayer, type Loop, type PlayerApi, type SoundSource } from '@/player'
 import { markPlayed } from '@/lib/local'
@@ -42,11 +43,15 @@ export interface SongSession {
   ytOffset: number
   setYtOffset: (n: number) => void
   audioRef: RefObject<HTMLAudioElement | null>
+  guitarRef: RefObject<HTMLAudioElement | null>
   ytMount: RefObject<HTMLDivElement | null>
   tabHost: RefObject<HTMLDivElement | null>
   soundSource: SoundSource
   setSoundSource: (s: SoundSource) => void
+  preferSoundSource: (s: SoundSource) => void
   tabAvailable: boolean
+  guitarAvailable: boolean
+  guitarUrl: string | null
 }
 
 const Ctx = createContext<SongSession | null>(null)
@@ -75,12 +80,21 @@ export function SongSessionProvider({
   const [curBeat, setCurBeat] = useState(-1)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [soundSource, setSoundSourceState] = useState<SoundSource>('original')
+  const tabAvailable = !!(analysis.tab?.alpha_tex || analysis.tab?.notes?.length)
+  const guitarHinted = hasIsolatedGuitar(analysis)
+  const [soundSource, setSoundSourceState] = useState<SoundSource>(() =>
+    preferredListenMode({ guitar: guitarHinted, tab: tabAvailable }),
+  )
+  const [guitarUrl, setGuitarUrl] = useState<string | null>(() =>
+    guitarHinted ? guitarStemCandidates(analysis.id, analysis.audio?.guitar)[0] : null,
+  )
 
   const audioRef = useRef<HTMLAudioElement>(null)
+  const guitarAudioRef = useRef<HTMLAudioElement>(null)
   const ytMount = useRef<HTMLDivElement>(null)
   const tabHost = useRef<HTMLDivElement>(null)
   const originalRef = useRef<PlayerApi | null>(null)
+  const guitarPlayerRef = useRef<PlayerApi | null>(null)
   const tabRef = useRef<(PlayerApi & { destroy?: () => void }) | null>(null)
   const sourceRef = useRef<SoundSource>(soundSource)
   sourceRef.current = soundSource
@@ -90,14 +104,48 @@ export function SongSessionProvider({
   ytOffsetRef.current = ytOffset
   const rateRef = useRef(rate)
   rateRef.current = rate
+  const userPicked = useRef(false)
 
-  const tabAvailable = !!(analysis.tab?.alpha_tex || analysis.tab?.notes?.length)
+  const guitarAvailable = !!guitarUrl
 
   const active = useCallback((): PlayerApi | null => {
-    return sourceRef.current === 'tab' ? tabRef.current : originalRef.current
+    if (sourceRef.current === 'tab') return tabRef.current
+    if (sourceRef.current === 'guitar') {
+      if (!guitarPlayerRef.current && guitarAudioRef.current && guitarUrl) {
+        guitarPlayerRef.current = audioPlayer(guitarAudioRef.current)
+        guitarPlayerRef.current.setRate(rateRef.current)
+      }
+      return guitarPlayerRef.current
+    }
+    return originalRef.current
+  }, [guitarUrl])
+
+  const pauseAll = useCallback(() => {
+    originalRef.current?.pause()
+    guitarPlayerRef.current?.pause()
+    tabRef.current?.pause()
+    audioRef.current?.pause()
+    guitarAudioRef.current?.pause()
   }, [])
 
-  useEffect(() => { markPlayed(analysis.id) }, [analysis.id])
+  useEffect(() => {
+    markPlayed(analysis.id)
+    userPicked.current = false
+  }, [analysis.id])
+
+  useEffect(() => {
+    let stop = false
+    const hinted = hasIsolatedGuitar(analysis)
+    const listed = analysis.audio?.guitar
+    if (hinted) setGuitarUrl(guitarStemCandidates(analysis.id, listed)[0])
+    else setGuitarUrl(null)
+    void resolveGuitarStemUrl(analysis.id, hinted, undefined, listed).then((url) => {
+      if (stop) return
+      if (url) setGuitarUrl(url)
+      else if (!hinted) setGuitarUrl(null)
+    })
+    return () => { stop = true }
+  }, [analysis.id, analysis.stems?.guitar, analysis.audio?.guitar, analysis.guitar?.source])
 
   useEffect(() => {
     if (mode === 'file' && audioRef.current) {
@@ -120,6 +168,27 @@ export function SongSessionProvider({
       return () => { destroyed = true; p?.destroy(); originalRef.current = null }
     }
   }, [analysis.meta.youtube_id, mode])
+
+  useEffect(() => {
+    const el = guitarAudioRef.current
+    if (!el || !guitarUrl) {
+      guitarPlayerRef.current = null
+      return
+    }
+    if (el.getAttribute('src') !== guitarUrl) el.src = guitarUrl
+    const p = audioPlayer(el)
+    p.setRate(rateRef.current)
+    guitarPlayerRef.current = p
+    return () => {
+      p.pause()
+      if (guitarPlayerRef.current === p) guitarPlayerRef.current = null
+    }
+  }, [guitarUrl])
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.muted = soundSource !== 'original'
+    if (guitarAudioRef.current) guitarAudioRef.current.muted = soundSource !== 'guitar'
+  }, [soundSource, guitarUrl])
 
   useEffect(() => {
     const tab = analysis.tab
@@ -174,6 +243,7 @@ export function SongSessionProvider({
   const seek = useCallback((tt: number) => {
     const t = Math.max(0, Math.min(analysis.duration, tt))
     originalRef.current?.seek(t)
+    guitarPlayerRef.current?.seek(t)
     tabRef.current?.seek(t)
   }, [analysis.duration])
 
@@ -185,22 +255,43 @@ export function SongSessionProvider({
       const beats = Number(analysis.tempo.time_signature.split('/')[0]) || 4
       await countIn(beats, 60 / analysis.tempo.bpm / rateRef.current)
     }
+    pauseAll()
     p.play()
-  }, [analysis.tempo, useCountIn, active])
+  }, [analysis.tempo, useCountIn, active, pauseAll])
 
-  const setSoundSource = useCallback((next: SoundSource) => {
+  const applySource = useCallback((next: SoundSource, picked: boolean) => {
     if (next === 'tab' && !tabAvailable) return
+    if (next === 'guitar' && !guitarUrl && !guitarPlayerRef.current) return
+    if (next === sourceRef.current && !picked) return
     const cur = active()
     const tnow = cur?.time() ?? 0
     const was = cur?.isPlaying() ?? false
-    cur?.pause()
+    if (picked) userPicked.current = true
+    pauseAll()
     sourceRef.current = next
     setSoundSourceState(next)
-    const other = next === 'tab' ? tabRef.current : originalRef.current
+    const other = next === 'tab'
+      ? tabRef.current
+      : next === 'guitar'
+        ? guitarPlayerRef.current
+        : originalRef.current
     other?.seek(tnow)
     other?.setRate(rateRef.current)
     if (was) other?.play()
-  }, [active, tabAvailable])
+  }, [active, tabAvailable, pauseAll, guitarUrl])
+
+  const setSoundSource = useCallback((next: SoundSource) => {
+    applySource(next, true)
+  }, [applySource])
+
+  const preferSoundSource = useCallback((next: SoundSource) => {
+    applySource(next, false)
+  }, [applySource])
+
+  useEffect(() => {
+    if (userPicked.current) return
+    preferSoundSource(preferredListenMode({ guitar: !!guitarUrl, tab: tabAvailable }))
+  }, [guitarUrl, tabAvailable, preferSoundSource])
 
   const loopSection = useCallback((i: number | null) => {
     if (i === null) return
@@ -246,6 +337,7 @@ export function SongSessionProvider({
       setRate(s)
       rateRef.current = s
       originalRef.current?.setRate(s)
+      guitarPlayerRef.current?.setRate(s)
       tabRef.current?.setRate(s)
     },
     setLoop,
@@ -267,11 +359,15 @@ export function SongSessionProvider({
     ytOffset,
     setYtOffset,
     audioRef,
+    guitarRef: guitarAudioRef,
     ytMount,
     tabHost,
     soundSource,
     setSoundSource,
+    preferSoundSource,
     tabAvailable,
+    guitarAvailable,
+    guitarUrl,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

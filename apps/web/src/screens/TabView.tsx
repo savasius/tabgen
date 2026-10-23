@@ -266,6 +266,7 @@ export function TabView() {
           soundSource={s.soundSource}
           onSoundSource={s.setSoundSource}
           tabAvailable={s.tabAvailable}
+          guitarAvailable={s.guitarAvailable}
         />
       </div>
     </div>
