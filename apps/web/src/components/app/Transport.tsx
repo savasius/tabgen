@@ -1,10 +1,11 @@
-import { Pause, Play, Repeat, SkipBack, SkipForward, Gauge } from "lucide-react";
+import { Pause, Play, Repeat, SkipBack, SkipForward, Gauge, Guitar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Segmented } from "@/components/ui/segmented";
 import { formatTime } from "@/lib/utils";
 import { useT } from "@/lib/store";
-import type { Loop } from "@/player";
+import type { Loop, SoundSource } from "@/player";
 import { cn } from "@/lib/utils";
 
 export function Transport({
@@ -21,6 +22,9 @@ export function Transport({
   onLoopClear,
   onCountIn,
   onSkip,
+  soundSource,
+  onSoundSource,
+  tabAvailable,
 }: {
   time: number;
   duration: number;
@@ -35,6 +39,9 @@ export function Transport({
   onLoopClear: () => void;
   onCountIn: (v: boolean) => void;
   onSkip: (dt: number) => void;
+  soundSource?: SoundSource;
+  onSoundSource?: (s: SoundSource) => void;
+  tabAvailable?: boolean;
 }) {
   const t = useT();
   return (
@@ -66,6 +73,23 @@ export function Transport({
             <span className="ml-1 text-lg font-semibold tabular">{Math.ceil(counting)}</span>
           )}
         </div>
+        {onSoundSource && soundSource && (
+          <div className="flex items-center gap-2" data-testid="sound-source">
+            <Guitar className="size-3.5 text-muted-foreground" />
+            <Segmented
+              size="sm"
+              value={soundSource}
+              onChange={(v) => {
+                if (v === "tab" && !tabAvailable) return
+                onSoundSource(v)
+              }}
+              options={[
+                { value: "original" satisfies SoundSource, label: t("player.soundOriginal") },
+                { value: "tab", label: t("player.soundTab"), hint: tabAvailable ? t("player.soundTabHint") : t("tab.empty") },
+              ]}
+            />
+          </div>
+        )}
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <Gauge className="size-3.5" />
           {t("player.speed")}

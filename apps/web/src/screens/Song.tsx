@@ -72,7 +72,7 @@ function SongChrome() {
     )
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-4 md:px-8">
+    <div className="relative mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-4 md:px-8">
       <header className="flex flex-wrap items-center gap-3 pt-4">
         <Button variant="ghost" size="icon-sm" asChild>
           <Link to="/" aria-label={t('common.back')}>
@@ -151,6 +151,13 @@ function SongChrome() {
 
       <audio ref={s.audioRef} src={api.audioUrl(a.id)} preload="auto" className="hidden" />
       {s.mode === 'youtube' && a.meta.youtube_id && <div className="yt-frame mx-auto hidden max-w-lg md:block" ref={s.ytMount} />}
+      <div
+        ref={s.tabHost}
+        className="pointer-events-none h-px w-px overflow-hidden opacity-0"
+        style={{ width: 1, height: 1 }}
+        aria-hidden
+        data-testid="tab-synth-host"
+      />
 
       <Outlet />
 
@@ -339,6 +346,9 @@ export function ChordsView() {
           onLoopClear={() => s.setLoop(null)}
           onCountIn={s.setCountIn}
           onSkip={(dt) => s.seek(s.time + dt)}
+          soundSource={s.soundSource}
+          onSoundSource={s.setSoundSource}
+          tabAvailable={s.tabAvailable}
         />
         <div className="mt-2 flex flex-wrap gap-2">
           <Button size="sm" variant={s.pendingA !== null ? 'default' : 'outline'} onClick={setLoopPoint}>

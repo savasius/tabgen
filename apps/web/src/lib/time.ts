@@ -35,6 +35,35 @@ export function locatePlayhead(a: Analysis, t: number): { bar: number; pos: numb
   return { bar, pos: posInBar(a, bar, t, false), beat }
 }
 
+/** PR #3 / alphaTab 1.8 note-property glyphs. `{p}` is slap/pop, `{/}` and `{~}` are invalid. */
+export type TechGlyph = 'h' | 'b' | 'sl' | 'v' | 'pm'
+
+export const TECH_GLYPH: Record<string, TechGlyph> = {
+  hammer: 'h',
+  pull: 'h',
+  bend: 'b',
+  slide: 'sl',
+  vibrato: 'v',
+  palmMute: 'pm',
+}
+
+export function techniqueGlyph(type: string | undefined): TechGlyph | undefined {
+  if (!type) return undefined
+  return TECH_GLYPH[type]
+}
+
+export function glyphsForNote(note: TabNote): TechGlyph[] {
+  const seen = new Set<TechGlyph>()
+  const out: TechGlyph[] = []
+  for (const t of note.techniques ?? []) {
+    const g = techniqueGlyph(t.type)
+    if (!g || seen.has(g)) continue
+    seen.add(g)
+    out.push(g)
+  }
+  return out
+}
+
 export interface StaffNote {
   id: string
   bar: number
@@ -44,21 +73,43 @@ export interface StaffNote {
   start: number
   end: number
   low: boolean
-  technique?: 'h' | 'p' | 'b' | 's' | 'v' | 'pm'
+  technique?: TechGlyph
+  glyphs: TechGlyph[]
+  techKind?: TabNote['techniques'][number]['type']
+  destId?: string
+  bendQt?: number
   midi: number
 }
 
-const TECH: Record<string, StaffNote['technique']> = {
-  hammer: 'h', pull: 'p', bend: 'b', slide: 's', vibrato: 'v', palmMute: 'pm',
+function bendQuarterTones(note: TabNote): number | undefined {
+  const bend = (note.techniques ?? []).find((t) => t.type === 'bend')
+  if (!bend) return undefined
+  if (typeof bend.quarter_tones === 'number') return clamp(Math.round(bend.quarter_tones), 1, 12)
+  if (typeof bend.cents === 'number') return clamp(Math.round(bend.cents / 50), 1, 12)
+  return 2
+}
+
+function nextSameString(list: StaffNote[], i: number): StaffNote | undefined {
+  const n = list[i]
+  let best: StaffNote | undefined
+  for (let j = 0; j < list.length; j++) {
+    if (j === i) continue
+    const m = list[j]
+    if (m.string !== n.string) continue
+    if (m.start <= n.start + 1e-4) continue
+    if (!best || m.start < best.start) best = m
+  }
+  return best
 }
 
 export function staffNotes(a: Analysis, notes: TabNote[]): StaffNote[] {
-  return notes.map((n, i) => {
+  const mapped: StaffNote[] = notes.map((n, i) => {
     let bi = 0
     while (bi + 1 < a.grid.length && a.grid[bi + 1].t <= n.start + 0.01) bi++
     const g = a.grid[bi]
     const bar = g?.bar ?? 0
-    const tech = n.techniques?.[0]?.type
+    const glyphs = glyphsForNote(n)
+    const kind = n.techniques?.[0]?.type
     return {
       id: `${i}-${n.start}-${n.string}-${n.fret}`,
       bar,
@@ -68,10 +119,20 @@ export function staffNotes(a: Analysis, notes: TabNote[]): StaffNote[] {
       start: n.start,
       end: n.end,
       low: !!n.low_confidence,
-      technique: tech ? TECH[tech] : undefined,
+      technique: glyphs[0],
+      glyphs,
+      techKind: kind,
+      bendQt: bendQuarterTones(n),
       midi: n.midi,
     }
   })
+  for (let i = 0; i < mapped.length; i++) {
+    const n = mapped[i]
+    if (!n.glyphs.includes('h') && !n.glyphs.includes('sl')) continue
+    const dest = nextSameString(mapped, i)
+    if (dest) n.destId = dest.id
+  }
+  return mapped
 }
 
 export function timeToTick(a: Analysis, t: number): number {

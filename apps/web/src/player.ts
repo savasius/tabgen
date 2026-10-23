@@ -16,6 +16,8 @@ export interface Loop {
   label?: string
 }
 
+export type SoundSource = 'original' | 'tab'
+
 export function audioPlayer(el: HTMLAudioElement): PlayerApi {
   el.preservesPitch = true
   return {

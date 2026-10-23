@@ -12,6 +12,10 @@ import { sectionNames } from '@/lib/display'
 import { beatsPerBar, locatePlayhead, notesAt, staffNotes, timeToTick, type StaffNote } from '@/lib/time'
 import { useSong } from './song-session'
 
+const LEGEND_GLYPH: Record<string, string> = {
+  bend: 'b', slide: 'sl', hammer: 'h', pull: 'h', vibrato: 'v', palmMute: 'pm',
+}
+
 export function TabView() {
   const { t, settings } = useApp()
   const s = useSong()
@@ -20,6 +24,7 @@ export function TabView() {
   const [sel, setSel] = useState<StaffNote | null>(null)
   const [zoom, setZoom] = useState(1)
   const [view, setView] = useState<'tab' | 'both' | 'fretboard'>('tab')
+  const [advanced, setAdvanced] = useState(false)
   const host = useRef<HTMLDivElement>(null)
   const apiRef = useRef<{ destroy(): void; tickPosition: number } | null>(null)
   const [tabErr, setTabErr] = useState<string | null>(null)
@@ -34,20 +39,7 @@ export function TabView() {
     () => new Set(mapped.filter((n) => n.start <= s.time && s.time < n.end).map((n) => n.id)),
     [mapped, s.time],
   )
-  const secNames = useMemo(() => sectionNames(a.sections, t), [a.sections, t])
   const bpb = beatsPerBar(a)
-
-  const groups = useMemo(() => {
-    if (!a.sections.length) {
-      return [{ title: '', bars: a.bars.map((b) => b.index) }]
-    }
-    const all = a.sections.map((sec, i) => ({
-      title: secNames[i] ?? sec.label,
-      bars: a.bars.filter((b) => b.section === i).map((b) => b.index),
-    })).filter((g) => g.bars.length)
-    const noted = all.filter((g) => mapped.some((n) => g.bars.includes(n.bar)))
-    return noted.length ? noted : all
-  }, [a.bars, a.sections, mapped, secNames])
 
   const byBarBeat = useMemo(() => {
     const map = new Map<string, { string: number; fret: number; low: boolean }[]>()
@@ -71,26 +63,27 @@ export function TabView() {
   useEffect(() => {
     const el = host.current
     const tex = tab?.alpha_tex
-    if (!el || !tex || view === 'tab') return
+    if (!el || !tex || view !== 'both') return
     let cancelled = false
     let handle: { destroy(): void; tickPosition: number } | null = null
     import('@coderline/alphatab').then((alphaTab) => {
       if (cancelled || !host.current) return
       try {
-        const settings = new alphaTab.Settings()
-        settings.core.engine = 'svg'
-        settings.core.fontDirectory = '/font/'
-        settings.core.useWorkers = false
-        settings.display.staveProfile = view === 'both' ? alphaTab.StaveProfile.Default : alphaTab.StaveProfile.Tab
-        settings.display.scale = zoom
-        settings.player.enablePlayer = true
-        settings.player.enableCursor = true
-        settings.player.enableAnimatedBeatCursor = true
-        settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia
-        const at = new alphaTab.AlphaTabApi(host.current, settings)
+        const atSettings = new alphaTab.Settings()
+        atSettings.core.engine = 'svg'
+        atSettings.core.fontDirectory = '/font/'
+        atSettings.core.useWorkers = false
+        atSettings.display.staveProfile = alphaTab.StaveProfile.Default
+        atSettings.display.scale = zoom
+        atSettings.player.enablePlayer = true
+        atSettings.player.enableCursor = true
+        atSettings.player.enableAnimatedBeatCursor = true
+        atSettings.player.scrollMode = alphaTab.ScrollMode.Off
+        // Visual only — audio comes from the shared Original | Tab guitar transport.
+        atSettings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia
+        const at = new alphaTab.AlphaTabApi(host.current, atSettings)
         at.error.on((e: Error) => { if (!cancelled) setTabErr(e?.message || String(e)) })
-        // Phase 2 alphaTex uses `{b (n)}` / `{sl}`; alphaTab 1.8 wants `{bu}` / `{s}`.
-        at.tex(tex.replaceAll('{b (', '{bu (').replaceAll('{sl}', '{s}'))
+        at.tex(tex)
         handle = at
         apiRef.current = at
       } catch (e) {
@@ -115,7 +108,7 @@ export function TabView() {
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-36">
+    <div className="flex flex-col gap-4 pb-44">
       <SectionStrip
         sections={a.sections}
         duration={a.duration}
@@ -127,18 +120,43 @@ export function TabView() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{t('tab.how')}</p>
-        <Segmented
-          size="sm"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'tab', label: t('tab.view.tab') },
-            { value: 'both', label: t('tab.view.both') },
-            { value: 'fretboard', label: t('tab.view.fretboard') },
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'tab', label: t('tab.view.tab') },
+              { value: 'both', label: t('tab.view.both') },
+              { value: 'fretboard', label: t('tab.view.fretboard') },
+            ]}
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={advanced} onCheckedChange={setAdvanced} />
+            {t('tab.advanced')}
+          </label>
+        </div>
+        <p className="font-mono text-xs font-semibold tracking-wide text-primary" data-testid="tab-glyph-key">
+          {t('tab.glyphs')}
+        </p>
       </div>
+
+      {(view === 'tab' || view === 'both') && (
+        <TabStaff
+          analysis={a}
+          notes={mapped}
+          currentBar={head.bar}
+          currentPos={head.pos}
+          selectedId={sel?.id}
+          nowIds={nowIds}
+          onSelect={(n) => { setSel(n); s.seek(n.start) }}
+          zoom={zoom}
+          emptyHint={t('tab.sectionChords')}
+          autoScroll={s.autoScroll}
+        />
+      )}
+
+      <p className="text-sm text-muted-foreground">{t('tab.how')}</p>
 
       {tab.stats?.fallback && (
         <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">{t('tab.fallback')}</div>
@@ -163,69 +181,63 @@ export function TabView() {
           <Switch checked={s.autoScroll} onCheckedChange={s.setAutoScroll} />
           {t('song.autoScroll')}
         </label>
-        <span className="text-xs text-muted-foreground">
-          {t('tab.notesCount', { n: tab.stats?.n_notes ?? notes?.length ?? 0 })}
-          {tab.stats?.n_low_confidence ? ` · ${tab.stats.n_low_confidence} ${t('tab.lowConf')}` : ''}
-          {tab.stats?.guitar_source ? ` · ${t('tab.guitarSource', { s: tab.stats.guitar_source })}` : ''}
-        </span>
-        <a className="ml-auto text-xs text-primary underline-offset-4 hover:underline" href={api.musicxmlUrl(a.id)}>{t('song.exportItems.musicxml')}</a>
-        <a className="text-xs text-primary underline-offset-4 hover:underline" href={api.alphatexUrl(a.id)}>{t('tab.exportAlphatex')}</a>
+        {advanced && (
+          <span className="text-xs text-muted-foreground">
+            {t('tab.notesCount', { n: tab.stats?.n_notes ?? notes?.length ?? 0 })}
+            {tab.stats?.n_low_confidence ? ` · ${tab.stats.n_low_confidence} ${t('tab.lowConf')}` : ''}
+            {tab.stats?.guitar_source ? ` · ${t('tab.guitarSource', { s: tab.stats.guitar_source })}` : ''}
+          </span>
+        )}
+        {advanced && (
+          <>
+            <a className="ml-auto text-xs text-primary underline-offset-4 hover:underline" href={api.musicxmlUrl(a.id)}>{t('song.exportItems.musicxml')}</a>
+            <a className="text-xs text-primary underline-offset-4 hover:underline" href={api.alphatexUrl(a.id)}>{t('tab.exportAlphatex')}</a>
+          </>
+        )}
       </div>
-
-      {(view === 'tab' || view === 'both') && (
-        <TabStaff
-          analysis={a}
-          notes={mapped}
-          currentBar={head.bar}
-          currentPos={head.pos}
-          selectedId={sel?.id}
-          nowIds={nowIds}
-          onSelect={(n) => { setSel(n); s.seek(n.start) }}
-          zoom={zoom}
-          groups={groups}
-          emptyHint={t('tab.sectionChords')}
-          autoScroll={s.autoScroll}
-        />
-      )}
 
       {view === 'both' && (
         <div className="alphatab-host overflow-auto rounded-2xl border border-border p-2" ref={host} />
       )}
       {view === 'both' && tabErr && <p className="text-xs text-muted-foreground">{tabErr}</p>}
 
-      {(view === 'fretboard' || view === 'both') && (
+      {(view === 'fretboard' || (view === 'both' && advanced)) && (
         <>
           <h3 className="text-sm font-semibold">{t('tab.fretboard')}</h3>
           <Fretboard notes={sounding} capo={tab.capo} lefty={settings.lefty} />
         </>
       )}
 
-      <h3 className="text-sm font-semibold">{t('tab.measureTable')}</h3>
-      <MeasureTable
-        bars={slice}
-        byBarBeat={byBarBeat}
-        curBar={head.bar}
-        curBeat={head.beat}
-        bpb={bpb}
-        onSeek={s.seek}
-        autoScroll={s.autoScroll && s.playing}
-        analysisBars={a.bars}
-      />
+      {advanced && (
+        <>
+          <h3 className="text-sm font-semibold">{t('tab.measureTable')}</h3>
+          <MeasureTable
+            bars={slice}
+            byBarBeat={byBarBeat}
+            curBar={head.bar}
+            curBeat={head.beat}
+            bpb={bpb}
+            onSeek={s.seek}
+            autoScroll={s.autoScroll && s.playing}
+            analysisBars={a.bars}
+          />
 
-      <details className="text-sm text-muted-foreground">
-        <summary>{t('tab.legendTitle')}</summary>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
-          {Object.entries(tab.technique_legend || {}).map(([k, v]) => {
-            const techKey = ({ bend: 'b', slide: 's', hammer: 'h', pull: 'p', vibrato: 'v', palmMute: 'pm' } as Record<string, string>)[k] ?? 'none'
-            return (
-              <li key={k}>
-                <b>{t(`tab.techniques.${techKey}` as TKey)}</b>
-                {' '}({v.reliability}) — {v.note}
-              </li>
-            )
-          })}
-        </ul>
-      </details>
+          <details className="text-sm text-muted-foreground">
+            <summary>{t('tab.legendTitle')}</summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {Object.entries(tab.technique_legend || {}).map(([k, v]) => {
+                const techKey = LEGEND_GLYPH[k] ?? 'none'
+                return (
+                  <li key={k}>
+                    <b>{t(`tab.techniques.${techKey}` as TKey)}</b>
+                    {' '}({v.reliability}) — {v.note}
+                  </li>
+                )
+              })}
+            </ul>
+          </details>
+        </>
+      )}
 
       <p className="text-[11px] text-muted-foreground">{t('tab.attribution')}</p>
 
@@ -251,6 +263,9 @@ export function TabView() {
           onLoopClear={() => s.setLoop(null)}
           onCountIn={s.setCountIn}
           onSkip={(dt) => s.seek(s.time + dt)}
+          soundSource={s.soundSource}
+          onSoundSource={s.setSoundSource}
+          tabAvailable={s.tabAvailable}
         />
       </div>
     </div>

@@ -5,8 +5,9 @@ export interface ChordSeg { start: number; end: number; label: string; beats: nu
 
 export interface Technique {
   type: 'bend' | 'slide' | 'hammer' | 'pull' | 'vibrato' | 'palmMute'
-  source: 'contour' | 'timing' | 'heuristic' | 'guess'
+  source: 'contour' | 'timing' | 'heuristic' | 'guess' | 'legato'
   cents?: number
+  quarter_tones?: number
   to_fret?: number
 }
 

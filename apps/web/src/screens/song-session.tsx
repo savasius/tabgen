@@ -2,9 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Analysis } from '@/api'
 import { useApp } from '@/lib/store'
 import { beatAt } from '@/lib/time'
+import { createTabGuitarPlayer } from '@/lib/tab-player'
 import { bestCapo, capoSuggestions, spellingForKey, type Level } from '@/music/chords'
-import { audioPlayer, countIn, youtubePlayer, type Loop, type PlayerApi } from '@/player'
+import { audioPlayer, countIn, youtubePlayer, type Loop, type PlayerApi, type SoundSource } from '@/player'
 import { markPlayed } from '@/lib/local'
+
+export type { SoundSource }
 
 export interface SongSession {
   analysis: Analysis
@@ -40,6 +43,10 @@ export interface SongSession {
   setYtOffset: (n: number) => void
   audioRef: RefObject<HTMLAudioElement | null>
   ytMount: RefObject<HTMLDivElement | null>
+  tabHost: RefObject<HTMLDivElement | null>
+  soundSource: SoundSource
+  setSoundSource: (s: SoundSource) => void
+  tabAvailable: boolean
 }
 
 const Ctx = createContext<SongSession | null>(null)
@@ -68,21 +75,34 @@ export function SongSessionProvider({
   const [curBeat, setCurBeat] = useState(-1)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [soundSource, setSoundSourceState] = useState<SoundSource>('original')
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const ytMount = useRef<HTMLDivElement>(null)
-  const playerRef = useRef<PlayerApi | null>(null)
+  const tabHost = useRef<HTMLDivElement>(null)
+  const originalRef = useRef<PlayerApi | null>(null)
+  const tabRef = useRef<(PlayerApi & { destroy?: () => void }) | null>(null)
+  const sourceRef = useRef<SoundSource>(soundSource)
+  sourceRef.current = soundSource
   const loopRef = useRef(loop)
   loopRef.current = loop
   const ytOffsetRef = useRef(ytOffset)
   ytOffsetRef.current = ytOffset
+  const rateRef = useRef(rate)
+  rateRef.current = rate
+
+  const tabAvailable = !!(analysis.tab?.alpha_tex || analysis.tab?.notes?.length)
+
+  const active = useCallback((): PlayerApi | null => {
+    return sourceRef.current === 'tab' ? tabRef.current : originalRef.current
+  }, [])
 
   useEffect(() => { markPlayed(analysis.id) }, [analysis.id])
 
   useEffect(() => {
     if (mode === 'file' && audioRef.current) {
-      playerRef.current = audioPlayer(audioRef.current)
-      playerRef.current.setRate(rate)
+      originalRef.current = audioPlayer(audioRef.current)
+      originalRef.current.setRate(rateRef.current)
       return
     }
     if (mode === 'youtube' && ytMount.current && analysis.meta.youtube_id) {
@@ -94,12 +114,32 @@ export function SongSessionProvider({
       youtubePlayer(holder, analysis.meta.youtube_id, () => ytOffsetRef.current).then((pl) => {
         if (destroyed) { pl.destroy(); return }
         p = pl
-        playerRef.current = pl
-        pl.setRate(rate)
+        originalRef.current = pl
+        pl.setRate(rateRef.current)
       })
-      return () => { destroyed = true; p?.destroy(); playerRef.current = null }
+      return () => { destroyed = true; p?.destroy(); originalRef.current = null }
     }
   }, [analysis.meta.youtube_id, mode])
+
+  useEffect(() => {
+    const tab = analysis.tab
+    if (!tab?.alpha_tex && !(tab?.notes?.length)) {
+      tabRef.current = null
+      return
+    }
+    const p = createTabGuitarPlayer({
+      host: tabHost.current,
+      tex: tab.alpha_tex,
+      notes: tab.notes ?? [],
+      duration: analysis.duration,
+    })
+    p.setRate(rateRef.current)
+    tabRef.current = p
+    return () => {
+      p.destroy()
+      if (tabRef.current === p) tabRef.current = null
+    }
+  }, [analysis.id, analysis.tab?.alpha_tex, analysis.duration, analysis.tab?.notes])
 
   useEffect(() => {
     let raf = 0
@@ -107,7 +147,7 @@ export function SongSessionProvider({
     let lastShown = -1
     let lastPlaying: boolean | null = null
     const tick = () => {
-      const p = playerRef.current
+      const p = active()
       if (p) {
         let now = p.time()
         const l = loopRef.current
@@ -122,7 +162,7 @@ export function SongSessionProvider({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [analysis])
+  }, [analysis, active])
 
   const suggestions = useMemo(
     () => capoSuggestions(analysis.chords, { level, transpose: semis }),
@@ -131,18 +171,36 @@ export function SongSessionProvider({
   const suggestedCapo = bestCapo(suggestions)
   const effCapo = capo ?? suggestedCapo
 
-  const seek = useCallback((tt: number) => playerRef.current?.seek(tt), [])
+  const seek = useCallback((tt: number) => {
+    const t = Math.max(0, Math.min(analysis.duration, tt))
+    originalRef.current?.seek(t)
+    tabRef.current?.seek(t)
+  }, [analysis.duration])
 
   const toggle = useCallback(async () => {
-    const p = playerRef.current
+    const p = active()
     if (!p) return
     if (p.isPlaying()) return p.pause()
     if (useCountIn && analysis.tempo.bpm > 0) {
       const beats = Number(analysis.tempo.time_signature.split('/')[0]) || 4
-      await countIn(beats, 60 / analysis.tempo.bpm / rate)
+      await countIn(beats, 60 / analysis.tempo.bpm / rateRef.current)
     }
     p.play()
-  }, [analysis.tempo, useCountIn, rate])
+  }, [analysis.tempo, useCountIn, active])
+
+  const setSoundSource = useCallback((next: SoundSource) => {
+    if (next === 'tab' && !tabAvailable) return
+    const cur = active()
+    const tnow = cur?.time() ?? 0
+    const was = cur?.isPlaying() ?? false
+    cur?.pause()
+    sourceRef.current = next
+    setSoundSourceState(next)
+    const other = next === 'tab' ? tabRef.current : originalRef.current
+    other?.seek(tnow)
+    other?.setRate(rateRef.current)
+    if (was) other?.play()
+  }, [active, tabAvailable])
 
   const loopSection = useCallback((i: number | null) => {
     if (i === null) return
@@ -184,7 +242,12 @@ export function SongSessionProvider({
     curBeat,
     toggle: () => { void toggle() },
     seek,
-    setSpeed: (s) => { setRate(s); playerRef.current?.setRate(s) },
+    setSpeed: (s) => {
+      setRate(s)
+      rateRef.current = s
+      originalRef.current?.setRate(s)
+      tabRef.current?.setRate(s)
+    },
     setLoop,
     setPendingA,
     setCountIn: (v) => { localStorage.setItem('tabgen.countIn', v ? '1' : '0'); setUseCountIn(v) },
@@ -205,6 +268,10 @@ export function SongSessionProvider({
     setYtOffset,
     audioRef,
     ytMount,
+    tabHost,
+    soundSource,
+    setSoundSource,
+    tabAvailable,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

@@ -100,6 +100,9 @@ export function PlayAlong() {
           onLoopClear={() => s.setLoop(null)}
           onCountIn={s.setCountIn}
           onSkip={(dt) => s.seek(s.time + dt)}
+          soundSource={s.soundSource}
+          onSoundSource={s.setSoundSource}
+          tabAvailable={s.tabAvailable}
         />
       </div>
     </div>
