@@ -76,34 +76,42 @@ def quantize_notes(notes: list[dict], beats: list[float], duration: float) -> li
     return out
 
 
+# alphaTab 1.8 note-property tokens (see https://alphatab.net/docs/alphatex/note-properties).
+# `{p}` is beat *pop*, not pull-off. Pull-off is `{h}` with a lower dest fret on the same string.
+# `{b (N)}` is a single bend point and does not draw an arrow; use `{b (0 N)}` (quarter-tones).
+# `{/}` and `{~}` are not valid tags.
+ALPHATEX_TECH = {
+    "bend": "b",
+    "hammer": "h",
+    "pull": "h",
+    "slide": "sl",
+    "vibrato": "v",
+    "palmMute": "pm",
+}
+
+
 def _tech_suffix(note: dict) -> str:
     kinds = []
     for t in note.get("techniques") or []:
         k = t["type"]
         if k not in kinds:
             kinds.append(k)
-    # alphaTab rejects duplicate tokens like `{h h}`; keep one legato mark.
+    # One slur mark: hammer/pull wins over slide. Duplicate `{h h}` also fails to parse.
     if "hammer" in kinds or "pull" in kinds:
         kinds = [k for k in kinds if k != "slide"]
     bits = []
     seen: set[str] = set()
     for k in kinds:
-        if k in seen:
+        tok = ALPHATEX_TECH.get(k)
+        if not tok or tok in seen:
             continue
-        seen.add(k)
+        seen.add(tok)
         if k == "bend":
             qt = int(next((t.get("quarter_tones") or 2) for t in note["techniques"] if t["type"] == "bend"))
-            bits.append(f"b ({qt})")
-        elif k == "vibrato":
-            bits.append("v")  # alphaTab has no '~' token; `v` draws the wave
-        elif k == "slide":
-            bits.append("sl")  # legato slide (line); '/' is not a valid alphaTex tag
-        elif k == "hammer":
-            bits.append("h")
-        elif k == "pull":
-            bits.append("p")
-        elif k == "palmMute":
-            bits.append("pm")
+            qt = max(1, min(12, qt))
+            bits.append(f"b (0 {qt})")
+        else:
+            bits.append(tok)
     if not bits:
         return ""
     return "{" + " ".join(bits) + "}"
@@ -190,10 +198,11 @@ def to_alphatex(
                 used = 0
                 for ci, ch in enumerate(chunks):
                     tok = DUR_TOKENS[ch]
-                    body = _emit_slot(starting) if ci == 0 else _emit_slot(starting)
-                    if ci < len(chunks) - 1:
-                        # tie leftover
-                        if body != "r" and "(" not in body:
+                    body = _emit_slot(starting)
+                    if ci > 0:
+                        # tied continuation of the same pitch — effects stay on the attack.
+                        # Do not treat `{b (0 4)}` as a chord; chords start with `(`.
+                        if body != "r" and not body.startswith("("):
                             body = body.split("{")[0] + "{t}"
                     parts.append(f":{tok} {body}")
                     used += ch

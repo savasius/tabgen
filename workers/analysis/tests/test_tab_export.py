@@ -21,7 +21,8 @@ def test_alphatex_has_barline_and_bend():
     assert r'\title "Solo"' in tex
     assert "|" in tex
     assert "8.1" in tex
-    assert "b (" in tex
+    assert "{b (0 2)}" in tex
+    assert "{b (2)}" not in tex  # single-point bend does not draw an arrow in alphaTab 1.8
 
 
 def test_alphatex_dedupes_repeated_hammer_tokens():
@@ -51,10 +52,54 @@ def test_alphatex_slide_and_vibrato_tokens():
     tex = to_alphatex(notes, BARS, BEATS, 2.0, title="x", bpm=120)
     assert "{sl}" in tex
     assert "{v}" in tex
-    assert "{p}" in tex
+    assert "{h}" in tex  # pull-off is `{h}` + lower dest fret; `{p}` is slap/pop
+    assert "{p}" not in tex
     assert "{ss}" not in tex
     assert "{~" not in tex
     assert "{/}" not in tex
+
+
+def test_alphatex_bend_paren_is_not_treated_as_a_chord():
+    notes = [{
+        "start": 0.0, "end": 0.7, "midi": 64, "string": 1, "fret": 8,
+        "techniques": [{"type": "bend", "source": "contour", "quarter_tones": 4}],
+    }]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0, title="x", bpm=120)
+    assert tex.count("{b (0 4)}") == 1
+    assert "8.1{t}" in tex
+
+
+def test_alphatex_effects_stay_on_the_attack_not_the_tie():
+    notes = [{
+        "start": 0.0, "end": 0.7, "midi": 64, "string": 1, "fret": 5,
+        "techniques": [{"type": "hammer", "source": "legato", "to_fret": 8}],
+    }]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0, title="x", bpm=120)
+    # 0.7s at 120 BPM is more than one 16th, so the note is split: first chunk has {h}.
+    assert "5.1{h}" in tex
+    assert "{t}" in tex
+    # the tied leftover must not steal the hammer mark
+    assert "{t}" in tex.split("5.1{h}")[-1] or "5.1{t}" in tex
+    first_h = tex.find("5.1{h}")
+    first_t = tex.find("5.1{t}")
+    assert first_h != -1
+    if first_t != -1:
+        assert first_h < first_t
+
+
+def test_alphatex_hammer_and_pull_share_h_token():
+    notes = [
+        {"start": 0.0, "end": 0.4, "midi": 64, "string": 1, "fret": 5,
+         "techniques": [{"type": "hammer", "source": "legato", "to_fret": 8}]},
+        {"start": 0.5, "end": 0.9, "midi": 67, "string": 1, "fret": 8, "techniques": []},
+        {"start": 1.0, "end": 1.4, "midi": 67, "string": 1, "fret": 8,
+         "techniques": [{"type": "pull", "source": "legato", "to_fret": 5}]},
+        {"start": 1.5, "end": 1.9, "midi": 64, "string": 1, "fret": 5, "techniques": []},
+    ]
+    tex = to_alphatex(notes, BARS, BEATS, 2.0, title="x", bpm=120)
+    assert "5.1{h}" in tex
+    assert "8.1{h}" in tex
+    assert "{p}" not in tex
 
 
 def test_musicxml_has_tab_clef_and_fret():
