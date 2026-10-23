@@ -1,4 +1,8 @@
-"""Run the Phase 2 pipeline on synth eval clips (Demucs skipped: the clip IS the guitar)."""
+"""Run the Phase 2 pipeline on synth eval clips.
+
+TABGEN_SKIP_SEPARATE=1 is correct here: the clip already IS isolated guitar, not a mix.
+Real user uploads never set this; they always run Demucs.
+"""
 
 from __future__ import annotations
 

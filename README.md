@@ -52,19 +52,22 @@ Keyboard: `Space` play/pause, `←/→` previous/next bar, `L` loop current sect
 
 ```
 upload / link ──▶ decode (ffmpeg, sha256 of PCM = cache key)
-                 ├─ Demucs htdemucs_6s ─▶ stems (on Apple MPS this stage is CPU-only)
-                 ├─ Beat This! ─▶ beats, downbeats, BPM (All-In-One 2× check; fold ½×/2× into 70–168)
+                 ├─ Demucs htdemucs_6s ─▶ stems (required; Apple MPS is CPU-only). Mix copies are not stems.
+                 ├─ Beat This! on the mix ─▶ beats, downbeats, BPM (All-In-One 2× check; fold ½×/2× into 70–168)
                  ├─ All-In-One (our stems) ─▶ sections
-                 ├─ lv-chordia on "mix − vocals − drums" ─▶ chords
-                 ├─ S-KEY ─▶ key   ·   librosa ─▶ tuning offset
+                 ├─ lv-chordia on the isolated guitar stem ─▶ chords  (never mix / harmonic)
+                 ├─ S-KEY + tuning on the guitar stem
                  ├─ post: beat grid, maj/min flicker or missing-third notes → :5, key from chord hierarchy
                  ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX prior) → octave-clean → 16th quantize → Viterbi
                  └─ techniques (bend/vibrato from contour; H/P/slide heuristic) → alphaTex + MusicXML
 ```
 
-If Demucs or tab fails, chords still return. Re-upload of the same file, or **Yeniden analiz et**,
-reuses stems (the slow Mac Demucs run is not wasted). `TABGEN_SKIP_SEPARATE=1` uses the mix as
-every stem (tests).
+If Demucs fails, the job fails — the mix is never analyzed as guitar. A weak/empty guitar stem
+still runs chords and tabs on that stem and sets `guitar.warning` (loud UI banner). Re-upload of
+the same file, or **Yeniden analiz et**, reuses real Demucs stems; mix-copy leftovers are discarded
+so Demucs runs again. `TABGEN_SKIP_SEPARATE=1` is eval/tests only (the clip already IS guitar).
+
+Playback: `GET /v1/analyses/{id}/audio?stem=mix|original|guitar`.
 
 Each stage is cached separately under `data/tracks/<hash>/stages/`, so swapping one model only
 recomputes that stage. Chord recognition is behind a `ChordRecognizer` interface

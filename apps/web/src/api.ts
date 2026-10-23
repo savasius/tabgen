@@ -35,6 +35,18 @@ export interface TabData {
   error?: string | null
 }
 
+export type AudioStem = 'mix' | 'guitar' | 'original'
+
+export interface GuitarInfo {
+  source: string
+  rms: number
+  mix_rms: number
+  ratio: number
+  warning: string | null
+  empty: boolean
+  separation?: string | null
+}
+
 export interface Analysis {
   id: string
   version: string
@@ -65,6 +77,9 @@ export interface Analysis {
   grid: GridBeat[]
   bars: Bar[]
   tab?: TabData | null
+  guitar?: GuitarInfo
+  audio?: { mix: string; original: string; guitar: string }
+  warnings?: { code: string; message: string }[]
   models: Record<string, string>
   timings: Record<string, number>
 }
@@ -92,7 +107,9 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  config: () => fetch(`${BASE}/v1/config`).then(json<{ url_ingest_enabled: boolean; device: string }>),
+  config: () => fetch(`${BASE}/v1/config`).then(json<{
+    url_ingest_enabled: boolean; device: string; pipeline_version?: string; audio_stems?: AudioStem[]
+  }>),
   upload: (file: File) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -111,7 +128,8 @@ export const api = {
     }).then(json<LibraryEntry>),
   reanalyze: (id: string) =>
     fetch(`${BASE}/v1/analyses/${id}/reanalyze`, { method: 'POST' }).then(json<Job>),
-  audioUrl: (id: string) => `${BASE}/v1/analyses/${id}/audio`,
+  audioUrl: (id: string, stem: AudioStem = 'mix') =>
+    `${BASE}/v1/analyses/${id}/audio${stem === 'mix' ? '' : `?stem=${encodeURIComponent(stem)}`}`,
   musicxmlUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/musicxml`,
   alphatexUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/alphatex`,
 }

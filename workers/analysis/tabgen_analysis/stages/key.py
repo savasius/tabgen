@@ -8,7 +8,7 @@ import torch
 
 from ..device import run_with_fallback
 
-MODEL_KEY = "skey-0.1-top2"
+MODEL_KEY = "skey-0.1-top2-guitar"
 
 # Order of S-KEY's 24 outputs (skey.key_detection.key_map), as (tonic, mode).
 _KEYS = [(t, "major") for t in ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]] + \

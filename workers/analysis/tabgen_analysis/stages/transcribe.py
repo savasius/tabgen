@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,41 @@ from ..config import models_dir
 
 log = logging.getLogger(__name__)
 
-MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v4"
+# v5: cache key includes guitar-stem routing so mix/harmonic transcriptions are not reused.
+MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v5-guitar"
+
+WEAK_RATIO = 0.08
+EMPTY_RMS = 1e-4
+EMPTY_RATIO = 0.01
+
+WARN_WEAK = (
+    "Guitar stem is quiet compared to the mix. Chords and tabs still used the isolated "
+    "guitar (never the full mix, vocals, drums, or bass)."
+)
+WARN_EMPTY = (
+    "Guitar stem is empty or near-silent. Chords and tabs were NOT computed from the mix. "
+    "Results will be empty or unreliable — the track may have no separable guitar."
+)
+
+
+class GuitarStemError(RuntimeError):
+    """No usable guitar stem. Callers must not fall back to the mix."""
+
+
+@dataclass(frozen=True)
+class GuitarSource:
+    path: Path
+    source: str  # guitar | guitar+other | guitar-weak
+    rms: float
+    mix_rms: float
+    ratio: float
+    warning: str | None = None
+    empty: bool = False
+
+    def cache_tag(self) -> str:
+        if self.source == "guitar+other":
+            return "guitarplusother"
+        return "guitar"
 
 TABCNN_URL = "https://huggingface.co/cstr/tabcnn-onnx/resolve/main/tabcnn-gpfx.onnx"
 TABCNN_SHA256 = "8d9ce59157bdab37fb4816d32d7f29f3da0cdbf3c7876707c819af4d1f88e6b7"
@@ -89,34 +124,67 @@ def rms_path(path: Path) -> float:
     return float(np.sqrt((mono.astype(np.float64) ** 2).mean() + 1e-16))
 
 
-def pick_guitar_source(stems: Path | None, mix: Path) -> tuple[Path, str, float]:
-    """Prefer the Demucs guitar stem; fall back to guitar+other / harmonic / mix if it's weak."""
+def _as_2d(wav: np.ndarray) -> np.ndarray:
+    return wav[:, None] if getattr(wav, "ndim", 1) == 1 else wav
+
+
+def sum_wavs(a: Path, b: Path, dest: Path) -> None:
+    aw, sr = sf.read(str(a), dtype="float32")
+    bw, _ = sf.read(str(b), dtype="float32")
+    aw, bw = _as_2d(aw), _as_2d(bw)
+    n = min(len(aw), len(bw))
+    ch = min(aw.shape[1], bw.shape[1])
+    mixed = aw[:n, :ch] + bw[:n, :ch]
+    peak = float(np.abs(mixed).max()) or 1.0
+    if peak > 1.0:
+        mixed = mixed / peak
+    sf.write(str(dest), mixed, sr)
+
+
+def pick_guitar_source(stems: Path, mix: Path) -> GuitarSource:
+    """Isolated guitar (or guitar+other on 6-stem bleed). Never mix, never harmonic."""
     if stems is None:
-        return mix, "mix", rms_path(mix)
+        raise GuitarStemError(
+            "No stem directory — Demucs did not run. The mix is not used as a fallback."
+        )
     guitar = stems / "guitar.wav"
     if not guitar.exists():
-        return mix, "mix", rms_path(mix)
+        raise GuitarStemError(
+            "Demucs did not write guitar.wav. The mix is not used as a fallback. "
+            "Re-run analysis after fixing separation."
+        )
     g = rms_path(guitar)
     m = rms_path(mix)
-    if g >= 0.08 * max(m, 1e-6):
-        return guitar, "guitar", g
+    chosen = GuitarSource(
+        path=guitar, source="guitar", rms=g, mix_rms=m,
+        ratio=g / max(m, 1e-9), warning=None, empty=False,
+    )
+    if chosen.ratio >= WEAK_RATIO and g >= EMPTY_RMS:
+        return chosen
+
     other = stems / "other.wav"
     if other.exists():
         combo = stems / "guitar_plus_other.wav"
-        if not combo.exists():
-            gw, sr = sf.read(str(guitar), dtype="float32")
-            ow, _ = sf.read(str(other), dtype="float32")
-            n = min(len(gw), len(ow))
-            mixed = gw[:n] + ow[:n]
-            peak = float(np.abs(mixed).max()) or 1.0
-            sf.write(combo, mixed / max(peak, 1.0), sr)
+        sum_wavs(guitar, other, combo)
         c = rms_path(combo)
-        if c >= 0.08 * max(m, 1e-6):
-            return combo, "guitar+other", c
-    harmonic = stems / "harmonic.wav"
-    if harmonic.exists():
-        return harmonic, "harmonic", rms_path(harmonic)
-    return guitar, "guitar-weak", g
+        c_ratio = c / max(m, 1e-9)
+        if c_ratio > chosen.ratio * 1.25 and c >= EMPTY_RMS:
+            chosen = GuitarSource(
+                path=combo, source="guitar+other", rms=c, mix_rms=m,
+                ratio=c_ratio, warning=None, empty=False,
+            )
+            if chosen.ratio >= WEAK_RATIO:
+                return chosen
+
+    empty = chosen.rms < EMPTY_RMS or chosen.ratio < EMPTY_RATIO
+    warning = WARN_EMPTY if empty else WARN_WEAK
+    source = "guitar-weak" if chosen.source == "guitar" else chosen.source
+    log.warning("%s (source=%s rms=%.5f mix_rms=%.5f ratio=%.4f)",
+                warning, source, chosen.rms, chosen.mix_rms, chosen.ratio)
+    return GuitarSource(
+        path=chosen.path, source=source, rms=chosen.rms, mix_rms=chosen.mix_rms,
+        ratio=chosen.ratio, warning=warning, empty=empty,
+    )
 
 
 def transcribe_basic_pitch(audio_path: Path) -> list[dict]:

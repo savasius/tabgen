@@ -23,7 +23,12 @@ must not be tagged as legato.
 .venv/bin/python eval/synth.py
 .venv/bin/python eval/tab_smoke.py          # Basic Pitch + Viterbi F1 on the pentatonic solo
 PYTHONPATH=workers/analysis .venv/bin/python eval/run_synth_pipeline.py
+PYTHONPATH=workers/analysis .venv/bin/python eval/guitar_vs_mix.py
 ```
+
+`guitar_vs_mix.py` injects a fake Demucs guitar stem (no Demucs run) plus loud bass/drums/vox
+distractors, then scores chords+tabs on the isolated guitar vs the same models on the mix.
+The mix path must not win — that is the regression for “the app is hearing the whole song.”
 
 `run_synth_pipeline.py` writes `data/eval/summary.json`. Do not add per-song
 overrides to chase one clip; remaining errors belong in the accuracy report.

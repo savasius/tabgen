@@ -4,13 +4,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tabgen_analysis import PIPELINE_VERSION, config, pipeline
+from tabgen_analysis.stages.separate import resolve_playback
 
 from . import jobs, library, sources
 
@@ -36,7 +37,8 @@ class LibraryPatch(BaseModel):
 @app.get("/v1/config")
 def get_config():
     return {"url_ingest_enabled": config.URL_INGEST_ENABLED, "device": config.DEVICE,
-            "pipeline_version": PIPELINE_VERSION}
+            "pipeline_version": PIPELINE_VERSION,
+            "audio_stems": ["mix", "original", "guitar"]}
 
 
 @app.post("/v1/jobs/upload")
@@ -143,9 +145,15 @@ def patch_analysis(analysis_id: str, body: LibraryPatch):
 
 
 @app.get("/v1/analyses/{analysis_id}/audio")
-def get_audio(analysis_id: str):
+def get_audio(analysis_id: str, stem: str = Query("mix", description="mix | original | guitar")):
     _analysis_file(analysis_id)
-    return FileResponse(config.track_dir(analysis_id) / "playback.mp3", media_type="audio/mpeg")
+    try:
+        path, media = resolve_playback(config.track_dir(analysis_id), stem)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return FileResponse(path, media_type=media)
 
 
 _WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"

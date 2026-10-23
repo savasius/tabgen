@@ -237,6 +237,12 @@ export function SongView({ id, onBack }: { id: string; onBack: () => void }) {
           <button className={view === 'tab' ? 'on' : ''} onClick={() => setView('tab')}>{t('viewTab')}</button>
         </div>
       </header>
+      {a.guitar?.warning && (
+        <div className="banner warn">
+          {t('guitarWarning')}
+          {a.guitar.source ? <span className="muted"> ({a.guitar.source})</span> : null}
+        </div>
+      )}
       {(a.stale || !a.tab?.notes?.length) && (
         <div className="banner warn">
           {t('staleBanner')}

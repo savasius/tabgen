@@ -1,4 +1,9 @@
-"""End-to-end analysis: audio file -> analysis.json (chords + tab)."""
+"""End-to-end analysis: audio file -> analysis.json (chords + tab).
+
+Chords, key, tuning, transcription, fingering, and techniques all listen to the
+isolated guitar stem (or guitar+other on 6-stem bleed). Beat This! stays on the
+mix so drums can stabilize the grid. The mix / harmonic.wav are never chord or tab input.
+"""
 
 import logging
 import time
@@ -92,9 +97,12 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     duration = probe_duration(mix)
 
     progress("separating", 8)
-    stems = timed("separate", lambda: separate.separate(track), required=False, default=None)
-    if stems is None:
-        stems = separate.fallback_from_mix(track)
+    # Required: a failed Demucs run must fail the job, not silently copy the mix into guitar.wav.
+    stems = timed("separate", lambda: separate.separate(track), required=True)
+    guitar = transcribe_stage.pick_guitar_source(stems, mix)
+    guitar_path = guitar.path
+    src_tag = guitar.cache_tag()
+    sep_method = (separate.read_manifest(stems) or {}).get("method")
 
     progress("beats", 40)
     beats = timed("beats", lambda: cached_json(audio_hash, beats_stage.MODEL_KEY,
@@ -111,24 +119,28 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
 
     progress("chords", 60)
     recognizer = chords_stage.get_recognizer()
-    chord_input = mix
-    if stems is not None and config.CHORD_INPUT == "harmonic" and (stems / "harmonic.wav").exists():
-        chord_input = stems / "harmonic.wav"
     raw_chords = timed(
         "chords",
         lambda: cached_json(
-            audio_hash, f"{recognizer.key}-{config.CHORD_INPUT}",
-            lambda: chords_stage.recognize(chord_input, recognizer)),
+            audio_hash, f"{recognizer.key}-src-{src_tag}",
+            lambda: chords_stage.recognize(guitar_path, recognizer)),
         required=False,
         default=[{"start": 0.0, "end": duration, "label": "N"}],
     )
 
     progress("key", 70)
-    key = timed("key", lambda: cached_json(audio_hash, key_stage.MODEL_KEY, lambda: key_stage.detect_key(mix)),
-                required=False, default={"tonic": "C", "mode": "major", "confidence": 0})
-    tuning = cached_json(audio_hash, "tuning-librosa",
-                         lambda: key_stage.estimate_tuning(
-                             stems / "harmonic.wav" if (stems / "harmonic.wav").exists() else mix))
+    key = timed(
+        "key",
+        lambda: cached_json(
+            audio_hash, f"{key_stage.MODEL_KEY}-src-{src_tag}",
+            lambda: key_stage.detect_key(guitar_path)),
+        required=False,
+        default={"tonic": "C", "mode": "major", "confidence": 0},
+    )
+    tuning = cached_json(
+        audio_hash, f"tuning-librosa-src-{src_tag}",
+        lambda: key_stage.estimate_tuning(guitar_path),
+    )
 
     beats, beat_source = choose_beat_grid(beats, struct)
     beats = post.fold_tempo_octave(beats, duration)
@@ -139,11 +151,10 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     key = post.reconcile_relative_key(key, merged)
 
     progress("transcribe", 80)
-    guitar_path, guitar_src, guitar_rms = transcribe_stage.pick_guitar_source(stems, mix)
     raw_notes = timed(
         "transcribe",
         lambda: cached_json(
-            audio_hash, transcribe_stage.MODEL_KEY,
+            audio_hash, f"{transcribe_stage.MODEL_KEY}-src-{src_tag}",
             lambda: transcribe_stage.transcribe(guitar_path, list(STANDARD_TUNING))),
         required=False,
         default={"notes": [], "model": None, "tabcnn": {"available": False}, "n_notes": 0},
@@ -171,8 +182,15 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     if xml:
         tab_musicxml_path(audio_hash).write_text(xml)
     tab_alphatex_path(audio_hash).write_text(tab.get("alpha_tex") or "")
-    tab.setdefault("stats", {})["guitar_source"] = guitar_src
-    tab["stats"]["guitar_rms"] = round(float(guitar_rms), 5)
+    tab.setdefault("stats", {})["guitar_source"] = guitar.source
+    tab["stats"]["guitar_rms"] = round(float(guitar.rms), 5)
+
+    warnings = []
+    if guitar.warning:
+        warnings.append({
+            "code": "guitar-empty" if guitar.empty else "guitar-weak",
+            "message": guitar.warning,
+        })
 
     progress("finalizing", 96)
     analysis = {
@@ -192,10 +210,26 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "bars": bars,
         "tab": {k: v for k, v in tab.items() if k != "musicxml"},
         "raw_chords": raw_chords,
+        "guitar": {
+            "source": guitar.source,
+            "rms": round(float(guitar.rms), 5),
+            "mix_rms": round(float(guitar.mix_rms), 5),
+            "ratio": round(float(guitar.ratio), 4),
+            "warning": guitar.warning,
+            "empty": guitar.empty,
+            "separation": sep_method,
+        },
+        "audio": {
+            "mix": f"/v1/analyses/{audio_hash}/audio?stem=mix",
+            "original": f"/v1/analyses/{audio_hash}/audio?stem=original",
+            "guitar": f"/v1/analyses/{audio_hash}/audio?stem=guitar",
+        },
+        "warnings": warnings,
         "models": {"separation": separate.MODEL_NAME, "beats": beats_stage.MODEL_KEY,
-                   "sections": structure.MODEL_KEY, "chords": recognizer.key, "chord_input": config.CHORD_INPUT,
+                   "sections": structure.MODEL_KEY, "chords": recognizer.key, "chord_input": src_tag,
                    "key": key_stage.MODEL_KEY, "tab": transcribe_stage.MODEL_KEY, "device": config.DEVICE,
-                   "demucs_device": config.demucs_device(), "guitar_source": guitar_src},
+                   "demucs_device": config.demucs_device(), "guitar_source": guitar.source,
+                   "separation_method": sep_method},
         "timings": timings,
         "created_at": time.time(),
     }

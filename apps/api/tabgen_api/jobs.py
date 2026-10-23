@@ -99,7 +99,11 @@ def submit_url(url: str) -> Job:
 
 
 def submit_reanalyze(audio_hash: str) -> Job:
-    """Re-run the current pipeline on cached mix/stems. Demucs is skipped if stems exist."""
+    """Re-run the current pipeline on cached mix/stems.
+
+    Real Demucs stems are reused. Mix-copy stems from older engines are discarded so
+    Demucs runs again; chords/tabs always listen to the guitar stem.
+    """
     job = _new_job()
 
     def work():
