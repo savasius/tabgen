@@ -11,7 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tabgen_analysis import PIPELINE_VERSION, config, pipeline
-from tabgen_analysis.stages.separate import resolve_playback
+from tabgen_analysis.stages.separate import resolve_playback, stems_dir
+
+STEM_NAMES = ("guitar", "vocals", "bass", "drums", "piano", "other", "harmonic")
 
 from . import jobs, library, sources
 
@@ -99,6 +101,8 @@ def get_analysis(analysis_id: str):
     if data.get("tab"):
         data["tab"].pop("musicxml", None)
     data.setdefault("tab", None)
+    stem_root = stems_dir(config.track_dir(analysis_id))
+    data["stems"] = {name: (stem_root / f"{name}.wav").exists() for name in STEM_NAMES}
     return data
 
 
@@ -144,8 +148,30 @@ def patch_analysis(analysis_id: str, body: LibraryPatch):
     return library.update(analysis_id, **fields) or library.upsert(analysis_id, fields) or library.get(analysis_id)
 
 
+@app.get("/v1/analyses/{analysis_id}/stems/{name}")
+def get_stem(analysis_id: str, name: str):
+    """Alias for isolated Demucs stems. Guitar matches `audio?stem=guitar`."""
+    _analysis_file(analysis_id)
+    kind = name.lower().strip()
+    if kind in ("guitar", "gitar", "mix", "original"):
+        try:
+            path, media = resolve_playback(config.track_dir(analysis_id), kind)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e)) from e
+        return FileResponse(path, media_type=media, filename=f"{analysis_id}-{kind}.wav")
+    if kind not in STEM_NAMES:
+        raise HTTPException(400, f"Unknown stem: {name}")
+    p = stems_dir(config.track_dir(analysis_id)) / f"{kind}.wav"
+    if not p.exists():
+        raise HTTPException(404, f"No {name} stem")
+    return FileResponse(p, media_type="audio/wav", filename=f"{analysis_id}-{kind}.wav")
+
+
 @app.get("/v1/analyses/{analysis_id}/audio")
 def get_audio(analysis_id: str, stem: str = Query("mix", description="mix | original | guitar")):
+    """Full mix, or `?stem=guitar` for the isolated Demucs guitar stem (PR #3)."""
     _analysis_file(analysis_id)
     try:
         path, media = resolve_playback(config.track_dir(analysis_id), stem)
