@@ -21,6 +21,9 @@ def main() -> None:
     print(json.dumps({k: res[k] for k in ("id", "duration", "tempo", "key", "tuning", "timings")}, indent=1))
     print("sections:", [(s["label"], s["start"]) for s in res["sections"]])
     print("chords:", " ".join(c["normal"] for c in res["chords"][:40]))
+    tab = res.get("tab") or {}
+    stats = tab.get("stats") or {}
+    print("tab:", stats.get("n_notes"), "notes", stats.get("fallback") or "", tab.get("error") or "")
 
 
 if __name__ == "__main__":

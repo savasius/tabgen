@@ -1,14 +1,15 @@
 # TabGen
 
 **TR:** Bir şarkıyı yükle (ya da bağlantısını yapıştır); TabGen tempoyu, vuruşları, bölümleri
-(giriş / kıta / nakarat / solo…) ve her vuruşun akorunu çıkarır. Şarkı çalarken o anki akor
-vurgulanır, sıradakiler görünür. Bölüm döngüsü, perdeyi bozmadan yavaşlatma, ton değiştirme,
-kapo önerisi ve "Basit / Normal / Tam" akor seviyesi var. Tamamen **kendi bilgisayarında, ücretsiz**
-çalışır. (Aşama 2: gitar tab'ı, Aşama 3: mikrofonla "birlikte çal" kontrolü.)
+(giriş / kıta / nakarat / solo…), her vuruşun akorunu ve **gitar tab'ını** çıkarır. Şarkı çalarken
+akor ızgarası veya tab (alphaTab + ölçü tablosu) senkron kayar. Bölüm döngüsü, perdeyi bozmadan
+yavaşlatma, ton değiştirme, kapo önerisi ve "Basit / Normal / Tam" akor seviyesi var. Tamamen
+**kendi bilgisayarında, ücretsiz** çalışır. (Aşama 3: mikrofonla "birlikte çal" kontrolü.)
 
-**EN:** Upload a song (or paste a link) and TabGen finds tempo, beats, sections and per-beat chords,
-then shows them synced to playback (Chordify-style), with section looping, pitch-preserving slow-down,
-transpose, capo suggestions and a simplified-chord toggle. Runs locally, free, no cloud.
+**EN:** Upload a song (or paste a link) and TabGen finds tempo, beats, sections, per-beat chords and
+guitar tab, then shows them synced to playback (chords grid or alphaTab), with section looping,
+pitch-preserving slow-down, transpose, capo suggestions and a simplified-chord toggle. Runs locally,
+free, no cloud.
 
 ## Quick start (macOS, Apple Silicon or Intel)
 
@@ -41,6 +42,8 @@ Linux works the same way (`apt install ffmpeg nodejs python3-venv` first). Windo
 | Transpose ± | renames chords by semitones (audio is not pitch-shifted yet) |
 | Capo | shows the shapes to play with a capo; the suggested capo is pre-selected |
 | Basit / Normal / Tam | Simple = major/minor only, Normal = up to 7ths, Full = everything incl. inversions |
+| Akorlar / Tab | switch between the chord grid and the tab view (alphaTab + fretboard + measure table) |
+| Yeniden analiz et | rebuild chords+tab from cached stems (Phase 1 Mac runs are reused; Demucs does not run again) |
 | Player → YouTube | play the official YouTube video instead of the file (embed, nothing downloaded); paste the link and adjust the sync offset |
 
 Keyboard: `Space` play/pause, `←/→` previous/next bar, `L` loop current section.
@@ -49,13 +52,22 @@ Keyboard: `Space` play/pause, `←/→` previous/next bar, `L` loop current sect
 
 ```
 upload / link ──▶ decode (ffmpeg, sha256 of PCM = cache key)
-                 ├─ Demucs htdemucs_6s ─▶ stems (vocals, drums, bass, guitar, piano, other)
-                 ├─ Beat This! ─▶ beats, downbeats, BPM (cross-checked with All-In-One for 2× tempo errors)
+                 ├─ Demucs htdemucs_6s ─▶ stems (required; Apple MPS is CPU-only). Mix copies are not stems.
+                 ├─ Beat This! on the mix ─▶ beats, downbeats, BPM (All-In-One 2× check; fold ½×/2× into 70–168)
                  ├─ All-In-One (our stems) ─▶ sections
-                 ├─ lv-chordia on "mix − vocals − drums" ─▶ chords
-                 ├─ S-KEY ─▶ key   ·   librosa ─▶ tuning offset
-                 └─ post: chord per beat, bars, sections snapped to downbeats ─▶ analysis.json
+                 ├─ lv-chordia on the isolated guitar stem ─▶ chords  (never mix / harmonic)
+                 ├─ S-KEY + tuning on the guitar stem
+                 ├─ post: beat grid, maj/min flicker or missing-third notes → :5, key from chord hierarchy
+                 ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX prior) → octave-clean → 16th quantize → Viterbi
+                 └─ techniques (bend/vibrato from contour; H/P/slide heuristic) → alphaTex + MusicXML
 ```
+
+If Demucs fails, the job fails — the mix is never analyzed as guitar. A weak/empty guitar stem
+still runs chords and tabs on that stem and sets `guitar.warning` (loud UI banner). Re-upload of
+the same file, or **Yeniden analiz et**, reuses real Demucs stems; mix-copy leftovers are discarded
+so Demucs runs again. `TABGEN_SKIP_SEPARATE=1` is eval/tests only (the clip already IS guitar).
+
+Playback: `GET /v1/analyses/{id}/audio?stem=mix|original|guitar`.
 
 Each stage is cached separately under `data/tracks/<hash>/stages/`, so swapping one model only
 recomputes that stage. Chord recognition is behind a `ChordRecognizer` interface

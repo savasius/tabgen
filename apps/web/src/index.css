@@ -124,9 +124,68 @@ input, select {
 .beat-now .beat-dot { color: #1b1b1f; }
 .foot { margin-top: 18px; }
 
+.view-tabs { margin-left: auto; }
+.banner {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: #3a3220; border: 1px solid #c4a35a; border-radius: 10px;
+  padding: 10px 12px; margin: 8px 0; font-size: 0.92rem;
+}
+.banner.warn { color: #f3ddb0; }
+.btn-link {
+  color: var(--accent2); text-decoration: none; border: 1px solid #3a3a44;
+  border-radius: 8px; padding: 6px 12px; background: var(--panel2);
+}
+.tab-view { margin-top: 8px; }
+.tab-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.alphatab-host {
+  min-height: 220px; max-height: min(50vh, 520px); overflow: auto;
+  /* Bravura glyphs are black; a dark host made the stave invisible. */
+  background: #f3efe6; color: #1b1b1f; border-radius: 12px; padding: 8px;
+}
+.alphatab-host svg { max-width: none; }
+.atHighlight { fill: rgba(245, 185, 66, 0.25) !important; }
+
+.fretboard {
+  display: flex; flex-direction: column; gap: 2px; overflow-x: auto;
+  font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 0.78rem;
+  margin: 8px 0 16px; padding: 8px; background: var(--panel); border-radius: 12px;
+}
+.fb-row, .meas-str { display: flex; align-items: center; gap: 2px; }
+.fb-name { width: 18px; color: var(--muted); flex: none; }
+.fb-cell {
+  width: 28px; height: 22px; text-align: center; border-bottom: 1px solid #3a3a44;
+  flex: none; line-height: 22px;
+}
+.fb-cell.fb-dot, .meas-cell.low, .fb-dot {
+  background: var(--accent); color: #1b1b1f; border-radius: 4px; font-weight: 700;
+}
+.fb-dot.low, .meas-cell.low { background: transparent; color: #f3ddb0;
+  outline: 1px dashed #e8a23c; }
+.fb-capo { box-shadow: inset 3px 0 0 #c4a35a; }
+
+.meas-table { display: flex; flex-direction: column; gap: 10px; overflow-x: auto; }
+.meas {
+  display: flex; gap: 8px; background: var(--panel); border-radius: 10px; padding: 8px;
+  border: 1px solid #2a2a33;
+}
+.meas-now { border-color: var(--accent); }
+.meas-num { color: var(--muted); min-width: 1.5rem; font-variant-numeric: tabular-nums; }
+.meas-strings { flex: 1; min-width: 0; }
+.meas-cell {
+  flex: 1; min-width: 36px; height: 26px; border: none; background: #1a1a20;
+  color: var(--text); font-family: ui-monospace, 'JetBrains Mono', monospace;
+}
+.meas-cell-now { background: var(--accent) !important; color: #1b1b1f; }
+
+.legend { margin: 16px 0; color: var(--muted); }
+.legend ul { padding-left: 1.2rem; }
+
 @media (max-width: 720px) {
   .bars { grid-template-columns: repeat(2, 1fr); }
   .now-chord { font-size: 2.4rem; min-width: 90px; }
   .tagline { display: none; }
   .beat { height: 44px; font-size: 0.95rem; }
+  .alphatab-host { min-height: 180px; max-height: 40vh; }
+  .fb-cell { width: 22px; }
+  .view-tabs { margin-left: 0; width: 100%; }
 }

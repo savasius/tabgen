@@ -44,6 +44,29 @@ def test_double_time_falls_back_to_allin1():
     assert src == "beat_this"
 
 
+def test_fold_tempo_doubles_slow_pulse():
+    beats = {"bpm": 57.7, "beats": [i * 1.04 for i in range(8)], "downbeats": [0.0, 2.08, 4.16, 6.24]}
+    out = post.fold_tempo_octave(beats, duration=9.0)
+    assert out["tempo_folded"] == "double"
+    assert abs(out["bpm"] - 115.4) < 0.2
+    assert len(out["beats"]) > len(beats["beats"])
+
+
+def test_fold_tempo_halves_fast_pulse():
+    beats = {"bpm": 200.0, "beats": [i * 0.3 for i in range(16)], "downbeats": [i * 1.2 for i in range(4)]}
+    out = post.fold_tempo_octave(beats, duration=5.0)
+    assert out["tempo_folded"] == "half"
+    assert abs(out["bpm"] - 100.0) < 0.2
+    assert 6 <= len(out["beats"]) <= 10
+
+
+def test_fold_tempo_leaves_typical_bpm():
+    beats = {"bpm": 100.0, "beats": [i * 0.6 for i in range(8)], "downbeats": [0.0, 2.4, 4.8]}
+    out = post.fold_tempo_octave(beats, duration=5.0)
+    assert "tempo_folded" not in out
+    assert out["bpm"] == 100.0
+
+
 def test_snap_sections_drops_silence_and_snaps():
     segs = [{"label": "start", "start": 0, "end": 0.5}, {"label": "intro", "start": 0.5, "end": 10.2},
             {"label": "verse", "start": 10.2, "end": 30.0}]

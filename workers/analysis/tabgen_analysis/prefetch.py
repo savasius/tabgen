@@ -22,6 +22,14 @@ def main() -> None:
     import skey  # noqa: F401  weights ship inside the package
     log.info("lv-chordia and S-KEY ready (bundled weights)")
 
+    from basic_pitch import FilenameSuffix, build_icassp_2022_model_path
+    p = build_icassp_2022_model_path(FilenameSuffix.onnx)
+    log.info("Basic Pitch ONNX -> %s (%s)", p, "ok" if p.exists() else "MISSING")
+
+    from .stages.transcribe import ensure_tabcnn
+    tcp = ensure_tabcnn()
+    log.info("TabCNN-GPFX -> %s", tcp)
+
 
 if __name__ == "__main__":
     main()

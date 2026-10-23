@@ -1,0 +1,333 @@
+{
+  "id": "major-loop",
+  "title": "Major I\u2013V\u2013vi\u2013IV loop",
+  "wav": "/workspace/data/eval/major-loop.wav",
+  "bpm": 100,
+  "key": {
+    "tonic": "B",
+    "mode": "major"
+  },
+  "expect_basic": "B F# G#m E",
+  "chords": [
+    {
+      "start": 0.0,
+      "end": 2.4,
+      "label": "B:maj"
+    },
+    {
+      "start": 2.4,
+      "end": 4.8,
+      "label": "F#:maj"
+    },
+    {
+      "start": 4.8,
+      "end": 7.2,
+      "label": "G#:min"
+    },
+    {
+      "start": 7.2,
+      "end": 9.6,
+      "label": "E:maj"
+    },
+    {
+      "start": 9.6,
+      "end": 12.0,
+      "label": "B:maj"
+    },
+    {
+      "start": 12.0,
+      "end": 14.4,
+      "label": "F#:maj"
+    },
+    {
+      "start": 14.4,
+      "end": 16.8,
+      "label": "G#:min"
+    },
+    {
+      "start": 16.8,
+      "end": 19.2,
+      "label": "E:maj"
+    }
+  ],
+  "beats": [
+    0.0,
+    0.6,
+    1.2,
+    1.8,
+    2.4,
+    3.0,
+    3.6,
+    4.2,
+    4.8,
+    5.4,
+    6.0,
+    6.6,
+    7.2,
+    7.8,
+    8.4,
+    9.0,
+    9.6,
+    10.2,
+    10.8,
+    11.4,
+    12.0,
+    12.6,
+    13.2,
+    13.8,
+    14.4,
+    15.0,
+    15.6,
+    16.2,
+    16.8,
+    17.4,
+    18.0,
+    18.6,
+    19.2
+  ],
+  "notes": [
+    {
+      "start": 0.0,
+      "end": 0.96,
+      "midi": 47
+    },
+    {
+      "start": 0.0,
+      "end": 0.96,
+      "midi": 51
+    },
+    {
+      "start": 0.0,
+      "end": 0.96,
+      "midi": 54
+    },
+    {
+      "start": 1.2,
+      "end": 2.35,
+      "midi": 47
+    },
+    {
+      "start": 1.2,
+      "end": 2.35,
+      "midi": 51
+    },
+    {
+      "start": 1.2,
+      "end": 2.35,
+      "midi": 54
+    },
+    {
+      "start": 2.4,
+      "end": 3.36,
+      "midi": 42
+    },
+    {
+      "start": 2.4,
+      "end": 3.36,
+      "midi": 46
+    },
+    {
+      "start": 2.4,
+      "end": 3.36,
+      "midi": 49
+    },
+    {
+      "start": 3.6,
+      "end": 4.75,
+      "midi": 42
+    },
+    {
+      "start": 3.6,
+      "end": 4.75,
+      "midi": 46
+    },
+    {
+      "start": 3.6,
+      "end": 4.75,
+      "midi": 49
+    },
+    {
+      "start": 4.8,
+      "end": 5.76,
+      "midi": 44
+    },
+    {
+      "start": 4.8,
+      "end": 5.76,
+      "midi": 47
+    },
+    {
+      "start": 4.8,
+      "end": 5.76,
+      "midi": 51
+    },
+    {
+      "start": 6.0,
+      "end": 7.15,
+      "midi": 44
+    },
+    {
+      "start": 6.0,
+      "end": 7.15,
+      "midi": 47
+    },
+    {
+      "start": 6.0,
+      "end": 7.15,
+      "midi": 51
+    },
+    {
+      "start": 7.2,
+      "end": 8.16,
+      "midi": 40
+    },
+    {
+      "start": 7.2,
+      "end": 8.16,
+      "midi": 44
+    },
+    {
+      "start": 7.2,
+      "end": 8.16,
+      "midi": 47
+    },
+    {
+      "start": 8.4,
+      "end": 9.55,
+      "midi": 40
+    },
+    {
+      "start": 8.4,
+      "end": 9.55,
+      "midi": 44
+    },
+    {
+      "start": 8.4,
+      "end": 9.55,
+      "midi": 47
+    },
+    {
+      "start": 9.6,
+      "end": 10.56,
+      "midi": 47
+    },
+    {
+      "start": 9.6,
+      "end": 10.56,
+      "midi": 51
+    },
+    {
+      "start": 9.6,
+      "end": 10.56,
+      "midi": 54
+    },
+    {
+      "start": 10.8,
+      "end": 11.95,
+      "midi": 47
+    },
+    {
+      "start": 10.8,
+      "end": 11.95,
+      "midi": 51
+    },
+    {
+      "start": 10.8,
+      "end": 11.95,
+      "midi": 54
+    },
+    {
+      "start": 12.0,
+      "end": 12.96,
+      "midi": 42
+    },
+    {
+      "start": 12.0,
+      "end": 12.96,
+      "midi": 46
+    },
+    {
+      "start": 12.0,
+      "end": 12.96,
+      "midi": 49
+    },
+    {
+      "start": 13.2,
+      "end": 14.35,
+      "midi": 42
+    },
+    {
+      "start": 13.2,
+      "end": 14.35,
+      "midi": 46
+    },
+    {
+      "start": 13.2,
+      "end": 14.35,
+      "midi": 49
+    },
+    {
+      "start": 14.4,
+      "end": 15.36,
+      "midi": 44
+    },
+    {
+      "start": 14.4,
+      "end": 15.36,
+      "midi": 47
+    },
+    {
+      "start": 14.4,
+      "end": 15.36,
+      "midi": 51
+    },
+    {
+      "start": 15.6,
+      "end": 16.75,
+      "midi": 44
+    },
+    {
+      "start": 15.6,
+      "end": 16.75,
+      "midi": 47
+    },
+    {
+      "start": 15.6,
+      "end": 16.75,
+      "midi": 51
+    },
+    {
+      "start": 16.8,
+      "end": 17.76,
+      "midi": 40
+    },
+    {
+      "start": 16.8,
+      "end": 17.76,
+      "midi": 44
+    },
+    {
+      "start": 16.8,
+      "end": 17.76,
+      "midi": 47
+    },
+    {
+      "start": 18.0,
+      "end": 19.15,
+      "midi": 40
+    },
+    {
+      "start": 18.0,
+      "end": 19.15,
+      "midi": 44
+    },
+    {
+      "start": 18.0,
+      "end": 19.15,
+      "midi": 47
+    }
+  ],
+  "duration": 19.4,
+  "techniques": [],
+  "clean_until": null
+}
