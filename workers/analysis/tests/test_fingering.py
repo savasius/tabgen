@@ -56,7 +56,7 @@ def test_drop_d_when_notes_below_e2():
 def test_legato_dest_stays_on_same_string():
     notes = [
         {"start": 0.00, "end": 0.36, "midi": 57, "velocity": 0.8, "confidence": 0.8, "onset_ratio": 4.0},
-        {"start": 0.16, "end": 0.50, "midi": 60, "velocity": 0.4, "confidence": 0.7, "onset_ratio": 1.1},
+        {"start": 0.16, "end": 0.50, "midi": 60, "velocity": 0.4, "confidence": 0.7, "onset_ratio": 1.0},
     ]
     out = assign_notes(notes)
     assert out[0]["string"] == out[1]["string"]
@@ -79,3 +79,31 @@ def test_chord_hint_prefers_chord_tones_in_rhythm():
     notes = [{"start": 0.0, "end": 0.5, "midi": 48, "velocity": 0.7, "confidence": 0.7}]  # C3
     out = assign_notes(notes, chord_at=lambda _t: "C:maj", hint_weight_at=lambda _t: 0.5)
     assert out[0]["fret"] <= 8
+
+
+def test_v2_handles_more_pitches_than_strings():
+    from tabgen_analysis.fingering import assign_notes_v2
+    midis = [40, 45, 47, 50, 52, 55, 59, 64]  # 8 pitches in one strum
+    notes = [{"start": 0.0, "end": 1.0, "midi": m, "velocity": 0.5 + 0.05 * i, "confidence": 0.7}
+             for i, m in enumerate(midis)]
+    out = [n for n in assign_notes_v2(notes) if n.get("string") is not None]
+    assert 5 <= len(out) <= 6
+    assert len({n["string"] for n in out}) == len(out)
+
+
+def test_v2_keeps_a_lick_in_one_position():
+    from tabgen_analysis.fingering import assign_notes_v2
+    # A minor pentatonic box at the 5th fret, up and down.
+    midis = [45, 48, 50, 52, 55, 57, 60, 62, 64, 62, 60, 57]
+    notes = [{"start": i * 0.2, "end": i * 0.2 + 0.18, "midi": m, "velocity": 0.7, "confidence": 0.7}
+             for i, m in enumerate(midis)]
+    out = assign_notes_v2(notes)
+    pressed = [n["fret"] for n in out if n["fret"]]
+    assert max(pressed) - min(pressed) <= 4
+
+
+def test_v2_old_greedy_also_survives_big_strum():
+    midis = [40, 45, 47, 50, 52, 55, 59, 64]
+    notes = [{"start": 0.0, "end": 1.0, "midi": m, "velocity": 0.6, "confidence": 0.7} for m in midis]
+    out = [n for n in assign_notes(notes) if n.get("string") is not None]
+    assert len(out) >= 5
