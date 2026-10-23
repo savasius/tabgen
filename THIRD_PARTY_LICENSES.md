@@ -19,6 +19,13 @@ TabGen is currently a **free, personal-use** tool. Before any public release, re
 | [Basic Pitch](https://github.com/spotify/basic-pitch) (Spotify) | guitar note events + pitch contours | Apache-2.0 | Apache-2.0 (ICASSP 2022 ONNX in the wheel) | low |
 | [TabCNN-GPFX](https://huggingface.co/cstr/tabcnn-onnx) ONNX | optional string/fret prior | CC BY 4.0 | CC BY 4.0 (GuitarSet + Pedroza et al. DAFx-24; cite both) | low (attribution) |
 | [onnxruntime](https://onnxruntime.ai) | Basic Pitch + TabCNN inference | MIT | — | low |
+
+### Evaluation data (not shipped, not redistributed — downloaded into `data/eval/` by hand)
+
+| Dataset | Used for | License | Risk |
+|---|---|---|---|
+| [GuitarSet](https://zenodo.org/records/3371780) (Xi et al. 2018) | note / string+fret ground truth (`eval/tab_bench.py`), fingering fit | CC BY 4.0 | low (cite) |
+| [IDMT-SMT-Guitar v2](https://zenodo.org/records/7544110) (Kehling et al. 2014) | bend / slide / vibrato + electric-guitar tab check (`eval/technique_bench.py`), fingering fit | CC BY-NC-ND 4.0 | eval only; fitted weights are a handful of numbers, no audio or labels are redistributed |
 | [pretty-midi](https://github.com/craffel/pretty-midi) | MIDI helper | MIT | — | low |
 | [alphaTab](https://alphatab.net) (`@coderline/alphatab`) | tab render + cursor | **MPL-2.0** | — | visible attribution required; modified MPL files must stay open |
 | React, Vite, FastAPI, PyTorch, NumPy, SciPy | app framework | MIT / BSD | — | low |

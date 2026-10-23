@@ -58,8 +58,10 @@ upload / link ──▶ decode (ffmpeg, sha256 of PCM = cache key)
                  ├─ lv-chordia on the isolated guitar stem ─▶ chords  (never mix / harmonic)
                  ├─ S-KEY + tuning on the guitar stem
                  ├─ post: beat grid, maj/min flicker or missing-third notes → :5, key from chord hierarchy
-                 ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX prior) → octave-clean → 16th quantize → Viterbi
-                 └─ techniques (bend/vibrato from contour; H/P/slide heuristic) → alphaTex + MusicXML
+                 ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX string/fret prior) → octave-clean
+                 │    → split-bend merge → global Viterbi fingering (eval/fingering_fit.py)
+                 └─ techniques (bend from split notes, slide/H-P from contour glide + attack, vibrato)
+                      → 16th quantize → alphaTex (per-bar tempo) + MusicXML
 ```
 
 If Demucs fails, the job fails — the mix is never analyzed as guitar. A weak/empty guitar stem
@@ -73,13 +75,45 @@ Each stage is cached separately under `data/tracks/<hash>/stages/`, so swapping 
 recomputes that stage. Chord recognition is behind a `ChordRecognizer` interface
 (`workers/analysis/tabgen_analysis/stages/chords.py`).
 
+## Tab kalitesi (p2.4) — Mac'te çalıştırma, yeniden analiz, bilinen sınırlar
+
+**Çalıştırma (Mac):** `./scripts/setup.sh` bir kez, sonra `./scripts/run.sh` → `http://localhost:8000`.
+Kurulum `setuptools<81`'i sabitler: daha yenisi `pkg_resources`'ı kaldırdı ve Basic Pitch import'u
+çöküyordu — bu durumda eski sürümde **tab sessizce akor şekli tahminine dönüyordu**. Artık bu olursa
+şarkı sayfasında kırmızı bir uyarı çıkar. Eski bir `.venv`'in varsa `./scripts/setup.sh`'ı tekrar çalıştır.
+Demucs Apple GPU'da (MPS) hata verdiği için hep CPU'da çalışır; 4 dakikalık şarkı ilk seferde ~2–3 dk.
+
+**Yeniden analiz:** eski motorla analiz edilmiş şarkılarda sarı bir şerit ve **Yeniden analiz et**
+düğmesi çıkar. Gitar stem'i önbellekte olduğu için Demucs tekrar çalışmaz; tab birkaç saniyede yenilenir.
+Komut satırından: `.venv/bin/tabgen-analyze şarkı.mp3`.
+
+**Ne değişti (ölçümler `eval/REPORT.md`'de):**
+
+- **Tel/perde seçimi:** açgözlü (greedy) seçim yerine bütün parça üzerinde Viterbi; el pozisyonu
+  sürekliliği, GuitarSet + IDMT gitar kayıtlarıyla ayarlanmış birkaç ağırlık. Doğru duyulan notalarda
+  tel+perde isabeti %57 → %85 (GuitarSet), %55 → %70 (IDMT elektro gitar).
+- **Kaybolan notalar:** uzun çalan bir notanın altındaki her yeni nota alphaTex'te siliniyordu (%8);
+  ve 6'dan fazla perde duyulan akorların tamamı atılıyordu. İkisi de düzeldi (%99 nota tab'a geçiyor).
+- **Teknikler:** Basic Pitch bend'i iki notaya böler; bunlar artık tek bend'li notaya birleşiyor
+  (½ / 1 ton, bırakma ↓). Hammer-on ile slide/bend perde eğrisinden ayrılıyor; distorsiyonlu gitarda
+  her notaya "hammer" yazılması büyük ölçüde bitti (100 notada 3,7 → 0,7 yanlış H/P).
+- **Tab gitar sesi:** her ölçü kendi temposunu taşıyor; Orijinal | Gitar | Tab gitar arasında geçişte
+  zaman çizgisi korunuyor.
+
+**Bilinen sınırlar (dürüst hali):** tab hâlâ "%100 doğru" değil. Temiz akustik gitarda notaların
+~%80'i, distorsiyonlu akorlarda ~%50'si doğru duyuluyor. Hammer-on/pull-off için etiketli gerçek veri
+yok; slide ve vibrato'nun yarısı kaçıyor. Distorsiyonlu, yankılı solo gitarda bend'lerin yarısından
+fazlası tab'da görünmeyebilir (perde doğru, bend işareti eksik). Yavaş şarkılarda vuruş takibi bazen iki kat tempo bulur
+(ör. Comfortably Numb 63 yerine 125 BPM) — tab okunur ama notalar sık görünür. Arka planda ritim
+gitarı da varsa (cover videoları) Demucs ikisini tek gitar stem'ine koyar. Ayrıntılı liste: `eval/REPORT.md`.
+
 ## Repo layout
 
 ```
 apps/api/          FastAPI app + in-process job queue (serves the built web app)
 apps/web/          React + Vite + TypeScript UI (src/music = chord/capo/transpose logic + tests)
 workers/analysis/  Python analysis pipeline (one module per stage) + tests
-eval/              accuracy sanity check script
+eval/              tab/technique benchmarks on real guitar data (see eval/README.md, eval/REPORT.md)
 scripts/           setup.sh, run.sh, dev.sh
 .cursor/           Cursor rules + cloud/remote dev environment
 ```

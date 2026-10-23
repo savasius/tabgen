@@ -1,5 +1,39 @@
 # Eval
 
+## Tab benchmarks on real guitar (p2.4)
+
+Results and the before/after table: [REPORT.md](REPORT.md). Data goes under `data/eval/` (gitignored):
+
+```bash
+mkdir -p data/eval/guitarset data/eval/idmt
+# GuitarSet (CC BY 4.0): annotations + mono mic audio (~700 MB)
+curl -L -o data/eval/guitarset/annotation.zip https://zenodo.org/api/records/3371780/files/annotation.zip/content
+curl -L -o data/eval/guitarset/audio_mono-mic.zip https://zenodo.org/api/records/3371780/files/audio_mono-mic.zip/content
+(cd data/eval/guitarset && unzip -q annotation.zip -d annotation && unzip -q audio_mono-mic.zip -d audio)
+# IDMT-SMT-Guitar v2 (CC BY-NC-ND 4.0, eval only, ~1.3 GB)
+curl -L -o data/eval/idmt/idmt.zip https://zenodo.org/api/records/7544110/files/IDMT-SMT-GUITAR_V2.zip/content
+(cd data/eval/idmt && unzip -q idmt.zip)
+```
+
+```bash
+export PYTHONPATH=workers/analysis
+# note F1 / tab F1 / string+fret accuracy / export survival on GuitarSet player 05 (+ hard variants)
+.venv/bin/python eval/tab_bench.py --backends bp-legacy:legacy:v2 --hard dist
+.venv/bin/python eval/tab_bench.py --backends bp-legacy:legacy:v2 --hard mix --limit 12   # runs Demucs
+# bend / slide / vibrato P/R + electric tab on IDMT licks (clean and distorted)
+.venv/bin/python eval/technique_bench.py --backend bp-legacy --fingering v2 [--hard dist]
+# refit the fingering weights (true pitches, string withheld; held-out GuitarSet 05 + IDMT Les Paul)
+.venv/bin/python eval/fingering_fit.py
+```
+
+Backend spec is `transcriber:cleaner:fingering` — transcribers are registered in
+`tabgen_analysis/stages/transcribe.py` (`bp-legacy` = Basic Pitch + TabCNN prior, `bp-notabcnn`,
+`tabcnn`, `bp@onset/frame/min_ms`). To get the "before" numbers, run the same scripts from a
+checkout of the previous commit (`git worktree add ../tabgen-baseline <commit>`; the scripts fall
+back to the old APIs there).
+
+## Phase 1/2 smoke checks
+
 Audio files stay out of the repo. After analyzing a song:
 
 ```bash
