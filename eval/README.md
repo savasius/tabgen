@@ -26,6 +26,9 @@ export PYTHONPATH=workers/analysis
 .venv/bin/python eval/fingering_fit.py
 ```
 
+Optional YourMT3+ backend (GPL-3.0, eval only, ~40 s per clip on an M1 Pro CPU) — setup and
+runner: `eval/backends/yourmt3_runner.py` (docstring); results are read by the `yourmt3` backend.
+
 Backend spec is `transcriber:cleaner:fingering` — transcribers are registered in
 `tabgen_analysis/stages/transcribe.py` (`bp-legacy` = Basic Pitch + TabCNN prior, `bp-notabcnn`,
 `tabcnn`, `bp@onset/frame/min_ms`). To get the "before" numbers, run the same scripts from a
