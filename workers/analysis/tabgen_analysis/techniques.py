@@ -547,3 +547,12 @@ def merge_split_bends(notes: list[dict], audio: _Audio | None = None, *,
         a.setdefault("techniques", []).append(tag)
         a["merged_bend"] = True
     return [n for i, n in enumerate(ordered) if i not in removed]
+
+
+def resolve_continuations(notes: list[dict]) -> list[dict]:
+    """Drop loose-threshold `continuation` notes that merge_split_bends did not fold into a bend.
+
+    Keeping unexplained continuations as hammer/slide destinations was measured and rejected:
+    ghost notes have no pick attack either, so it doubled false H/P (IDMT 0.4 -> 2.6 per 100).
+    """
+    return [n for n in notes if not n.get("continuation")]

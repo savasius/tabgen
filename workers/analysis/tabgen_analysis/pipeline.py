@@ -186,6 +186,14 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     tab["stats"]["guitar_rms"] = round(float(guitar.rms), 5)
 
     warnings = []
+    if not raw_notes.get("model"):
+        # Never silent: without notes the tab is chord-shape guesswork (this is what a broken
+        # basic-pitch install looked like — every song "worked" but the tab was nonsense).
+        warnings.append({
+            "code": "transcribe-failed",
+            "message": "Note transcription failed on the guitar stem; the tab is a chord-shape guess. "
+                       "Check the server log and re-run setup, then reanalyze.",
+        })
     if guitar.warning:
         warnings.append({
             "code": "guitar-empty" if guitar.empty else "guitar-weak",

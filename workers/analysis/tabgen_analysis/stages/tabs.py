@@ -13,7 +13,8 @@ from ..fingering import chord_pitch_classes, detect_tuning, tuning_names
 
 log = logging.getLogger(__name__)
 
-MODEL_KEY = "tab-viterbi-1"
+# v2: global Viterbi fingering (fitted on GuitarSet + IDMT), split-bend merge before fingering.
+MODEL_KEY = "tab-viterbi-2"
 
 
 def _chord_at_factory(chords: list[dict]):
@@ -126,7 +127,10 @@ def build_tab(
     chord_at = _chord_at_factory(chords)
     audio = techniques.load_audio(guitar_path)
     techniques.attach_onsets(notes_in, audio)
-    assigned = fingering.assign_notes(
+    # Basic Pitch writes one bent note as two; fold them before fingering so the tab shows
+    # "7b9" on one string instead of a fake hammer-on to fret 9 (or 8 on another string).
+    notes_in = techniques.resolve_continuations(techniques.merge_split_bends(notes_in, audio))
+    assigned = fingering.assign_notes_v2(
         notes_in, tuning=tuning, capo=capo,
         chord_at=chord_at, hint_weight_at=_hint_weight_factory(sections),
     )

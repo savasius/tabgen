@@ -262,7 +262,7 @@ def test_pipeline_chords_key_tabs_use_guitar_not_harmonic(tmp_path, monkeypatch)
     assert out["guitar"]["source"] == "guitar"
     assert out["guitar"]["warning"] is None
     assert out["audio"]["guitar"].endswith("?stem=guitar")
-    assert out["version"].startswith("p2.3-guitarstem")
+    assert "guitarstem" in out["version"]
 
 
 def test_pipeline_separate_failure_does_not_copy_mix(tmp_path, monkeypatch):

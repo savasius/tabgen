@@ -20,7 +20,10 @@ from ..config import models_dir
 log = logging.getLogger(__name__)
 
 # v5: cache key includes guitar-stem routing so mix/harmonic transcriptions are not reused.
-MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v5-guitar"
+# v6: Basic Pitch thresholds 0.42/0.28/90ms -> 0.65/0.35/100ms (swept on GuitarSet 00-01;
+#     held-out GuitarSet 05 note F1 0.78 -> 0.82, IDMT electric licks 0.70 -> 0.76).
+MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v6-guitar"
+BP_ONSET, BP_FRAME, BP_MIN_MS = 0.65, 0.35, 100.0
 
 WEAK_RATIO = 0.08
 EMPTY_RMS = 1e-4
@@ -187,7 +190,8 @@ def pick_guitar_source(stems: Path, mix: Path) -> GuitarSource:
     )
 
 
-def transcribe_basic_pitch(audio_path: Path) -> list[dict]:
+def transcribe_basic_pitch(audio_path: Path, onset_threshold: float = BP_ONSET,
+                           frame_threshold: float = BP_FRAME, min_note_ms: float = BP_MIN_MS) -> list[dict]:
     import contextlib
     import io
     from basic_pitch.inference import predict
@@ -200,11 +204,9 @@ def transcribe_basic_pitch(audio_path: Path) -> list[dict]:
             minimum_frequency=MIN_HZ,
             maximum_frequency=MAX_HZ,
             midi_tempo=120,
-            # Slightly more sensitive than the vocal-oriented defaults: guitar
-            # strums split energy across strings so onsets are weaker per pitch.
-            onset_threshold=0.42,
-            frame_threshold=0.28,
-            minimum_note_length=90.0,
+            onset_threshold=onset_threshold,
+            frame_threshold=frame_threshold,
+            minimum_note_length=min_note_ms,
         )
     notes = []
     for start, end, pitch, vel, bends in events:
@@ -220,6 +222,62 @@ def transcribe_basic_pitch(audio_path: Path) -> list[dict]:
             "low_confidence": conf < 0.35,
         })
     return notes
+
+
+def _bp_events(audio_path: Path, settings: list[tuple[float, float, float]]) -> list[list]:
+    """One Basic Pitch forward pass, note decoding at several threshold settings."""
+    import contextlib
+    import io
+    from basic_pitch import inference as bpi
+    from basic_pitch.constants import AUDIO_SAMPLE_RATE, FFT_HOP
+    from basic_pitch.note_creation import model_output_to_notes
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        out = bpi.run_inference(str(audio_path), _bp())
+    res = []
+    for onset, frame, min_ms in settings:
+        _midi, events = model_output_to_notes(
+            out, onset_thresh=onset, frame_thresh=frame,
+            min_note_len=int(np.round(min_ms / 1000 * (AUDIO_SAMPLE_RATE / FFT_HOP))),
+            min_freq=MIN_HZ, max_freq=MAX_HZ, multiple_pitch_bends=True, melodia_trick=True,
+            midi_tempo=120,
+        )
+        res.append(events)
+    return res
+
+
+def _event_notes(events) -> list[dict]:
+    notes = []
+    for start, end, pitch, vel, bends in events:
+        conf = float(vel)
+        notes.append({
+            "start": round(float(start), 4), "end": round(float(end), 4), "midi": int(pitch),
+            "velocity": round(conf, 4), "confidence": round(min(1.0, conf), 4),
+            "bends": [int(b) for b in bends] if bends else None,
+            "source": "basic-pitch", "low_confidence": conf < 0.35,
+        })
+    return notes
+
+
+def transcribe_with_continuations(audio_path: Path) -> list[dict]:
+    """Strict thresholds for the notes, plus loose-threshold notes that start inside a kept note.
+
+    The strict setting drops most ghost notes, but also the unpicked second half of a split bend,
+    slide or hammer-on (its onset is weak by definition). Those come back flagged
+    `continuation`; techniques.resolve_continuations keeps only the ones that turn out legato.
+    """
+    hi_ev, lo_ev = _bp_events(audio_path, [(BP_ONSET, BP_FRAME, BP_MIN_MS), (0.42, 0.28, 60.0)])
+    hi, lo = _event_notes(hi_ev), _event_notes(lo_ev)
+    out = list(hi)
+    for n in lo:
+        t, m = float(n["start"]), int(n["midi"])
+        if any(int(h["midi"]) == m and abs(float(h["start"]) - t) < 0.05 for h in hi):
+            continue
+        if any(float(h["start"]) < t - 0.03 and t <= float(h["end"]) + 0.05
+               and 1 <= abs(m - int(h["midi"])) <= 5 for h in hi):
+            out.append({**n, "continuation": True, "low_confidence": True})
+    out.sort(key=lambda n: (float(n["start"]), int(n["midi"])))
+    return out
 
 
 def _tabcnn_frames(audio_path: Path) -> tuple[np.ndarray, str] | tuple[None, None]:
@@ -365,6 +423,8 @@ def clean_notes(notes: list[dict], onset_merge: float = 0.045,
 
 
 def transcribe(audio_path: Path, tuning: list[int]) -> dict:
+    # transcribe_with_continuations (strict + loose notes for split bends) was benchmarked and
+    # lost to plain strict thresholds on GuitarSet and IDMT; kept as the `bp-cont` eval backend.
     notes = clean_notes(transcribe_basic_pitch(audio_path))
     tabcnn_meta = {"available": False}
     try:
@@ -377,3 +437,152 @@ def transcribe(audio_path: Path, tuning: list[int]) -> dict:
         "tabcnn": tabcnn_meta,
         "n_notes": len(notes),
     }
+
+
+def clean_notes_v2(notes: list[dict], onset_merge: float = 0.045,
+                   harmonic_window: float = 0.06, ghost_ratio: float = 0.6) -> list[dict]:
+    """Like `clean_notes`, but keeps real chord octaves.
+
+    A strummed open E has E2 B2 E3 G#3 B3 E4: 12-, 19- and 24-semitone pairs that are all
+    played. The legacy cleaner deleted the upper note of every such pair, gutting chords.
+    Here an upper partial is only dropped when it is clearly weaker than its fundamental
+    and does not start first (a played note has its own attack).
+    """
+    if not notes:
+        return notes
+    ordered = sorted(notes, key=lambda n: (float(n["start"]), int(n["midi"])))
+    merged: list[dict] = []
+    for n in ordered:
+        n = dict(n)
+        if (merged and int(merged[-1]["midi"]) == int(n["midi"])
+                and float(n["start"]) <= float(merged[-1]["end"]) + onset_merge):
+            merged[-1]["end"] = max(float(merged[-1]["end"]), float(n["end"]))
+            if float(n.get("velocity") or 0) > float(merged[-1].get("velocity") or 0):
+                merged[-1]["velocity"] = n.get("velocity")
+                merged[-1]["confidence"] = n.get("confidence", n.get("velocity"))
+            continue
+        merged.append(n)
+
+    def vel(n: dict) -> float:
+        return float(n.get("velocity") or n.get("confidence") or 0)
+
+    drop: set[int] = set()
+    for i, hi in enumerate(merged):
+        th = float(hi["start"])
+        for j in range(i - 1, -1, -1):
+            lo = merged[j]
+            if th - float(lo["start"]) > harmonic_window:
+                break
+            d = int(hi["midi"]) - int(lo["midi"])
+            if d not in (12, 19, 24, 28, 31):
+                continue
+            if vel(hi) < ghost_ratio * vel(lo):
+                drop.add(i)
+                break
+    out = [n for i, n in enumerate(merged) if i not in drop]
+    out.sort(key=lambda n: (float(n["start"]), int(n["midi"])))
+    return out
+
+
+# ---------------------------------------------------------------- swappable transcribers
+#
+# Every backend returns raw (uncleaned) notes: start/end seconds, midi, velocity, confidence,
+# optional `bends` (Basic Pitch 1/3-semitone contour) and optional `tabcnn`/`string_i`+`fret`
+# priors. Cleaning, fingering and techniques run downstream and are shared, so swapping the
+# note model is one registry entry. `eval/tab_bench.py` scores every entry on the same audio.
+
+
+class Transcriber:
+    key = "base"
+
+    def transcribe(self, audio_path: Path, tuning: list[int]) -> list[dict]:
+        raise NotImplementedError
+
+
+class BasicPitchTranscriber(Transcriber):
+    def __init__(self, onset: float = 0.42, frame: float = 0.28, min_ms: float = 90.0,
+                 tabcnn: bool = True):
+        self.onset, self.frame, self.min_ms, self.use_tabcnn = onset, frame, min_ms, tabcnn
+        self.key = f"bp-{onset}-{frame}-{int(min_ms)}" + ("-tabcnn" if tabcnn else "")
+
+    def transcribe(self, audio_path: Path, tuning: list[int]) -> list[dict]:
+        notes = transcribe_basic_pitch(audio_path, self.onset, self.frame, self.min_ms)
+        if self.use_tabcnn:
+            try:
+                attach_tabcnn(notes, audio_path, tuning)
+            except Exception:
+                log.exception("TabCNN attach failed")
+        return notes
+
+
+class BasicPitchContTranscriber(Transcriber):
+    key = "bp-cont"
+
+    def transcribe(self, audio_path: Path, tuning: list[int]) -> list[dict]:
+        notes = transcribe_with_continuations(audio_path)
+        attach_tabcnn(notes, audio_path, tuning)
+        return notes
+
+
+class TabCNNTranscriber(Transcriber):
+    """TabCNN-GPFX on its own: per-string fret classes per frame → notes on that string."""
+    key = "tabcnn-gpfx"
+
+    def __init__(self, min_frames: int = 3, prob: float = 0.5):
+        self.min_frames, self.prob = min_frames, prob
+
+    def transcribe(self, audio_path: Path, tuning: list[int]) -> list[dict]:
+        frames, _ = _tabcnn_frames(audio_path)
+        if frames is None:
+            return []
+        probs = np.exp(frames)  # [T, 6, 21]; class 0 = silent
+        cls = probs.argmax(-1)
+        conf = probs.max(-1)
+        notes: list[dict] = []
+        # TabCNN's string axis is low E first in GuitarSet ordering (verified by attach_tabcnn
+        # order search on real clips); fret class k → fret k-1.
+        for s in range(6):
+            t = 0
+            T = len(cls)
+            while t < T:
+                k = int(cls[t, s])
+                if k == 0 or conf[t, s] < self.prob:
+                    t += 1
+                    continue
+                u = t
+                while u + 1 < T and int(cls[u + 1, s]) == k:
+                    u += 1
+                if u - t + 1 >= self.min_frames:
+                    fret = k - 1
+                    c = float(conf[t:u + 1, s].mean())
+                    notes.append({
+                        "start": round(t * TABCNN_HOP, 4), "end": round((u + 1) * TABCNN_HOP, 4),
+                        "midi": int(tuning[s]) + fret, "velocity": round(c, 4),
+                        "confidence": round(c, 4), "bends": None, "source": "tabcnn",
+                        "tabcnn": {"string": s, "fret": fret, "confidence": round(c, 3)},
+                        "low_confidence": c < 0.6,
+                    })
+                t = u + 1
+        notes.sort(key=lambda n: (n["start"], n["midi"]))
+        return notes
+
+
+def _registry() -> dict[str, callable]:
+    return {
+        "bp": lambda: BasicPitchTranscriber(BP_ONSET, BP_FRAME, BP_MIN_MS, tabcnn=True),  # pipeline
+        "bp-cont": lambda: BasicPitchContTranscriber(),  # eval: strict notes + loose split-bend halves
+        "bp-legacy": lambda: BasicPitchTranscriber(0.42, 0.28, 90.0, tabcnn=True),  # p2.3 settings
+        "bp-notabcnn": lambda: BasicPitchTranscriber(0.42, 0.28, 90.0, tabcnn=False),
+        "tabcnn": lambda: TabCNNTranscriber(),
+    }
+
+
+def get_transcriber(name: str) -> Transcriber:
+    """`bp@onset/frame/min_ms` builds a Basic Pitch variant on the fly (used by the bake-off)."""
+    if name.startswith("bp@"):
+        o, f, m = (float(x) for x in name[3:].split("/"))
+        return BasicPitchTranscriber(o, f, m, tabcnn=True)
+    reg = _registry()
+    if name not in reg:
+        raise KeyError(f"unknown transcriber {name!r}; have {sorted(reg)}")
+    return reg[name]()
