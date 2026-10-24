@@ -40,6 +40,22 @@ export interface TabData {
 
 export type AudioStem = 'mix' | 'guitar' | 'original'
 
+/** One guitar split out of the guitar stem (by stereo position, or lead line vs comping). */
+export interface GuitarPart {
+  id: string
+  role: 'lead' | 'rhythm'
+  pan: number
+  side: 'left' | 'centre' | 'right'
+  share: number | null
+  split: 'stereo' | 'role'
+  chords: ChordSeg[]
+  /** per-beat chords heard on this guitar alone; null = the song's grid */
+  grid: GridBeat[] | null
+  chords_source: 'part' | 'song'
+  audio: string
+  tab: TabData
+}
+
 export interface GuitarInfo {
   source: string
   rms: number
@@ -80,6 +96,8 @@ export interface Analysis {
   grid: GridBeat[]
   bars: Bar[]
   tab?: TabData | null
+  /** empty when the stem holds a single guitar */
+  parts?: GuitarPart[]
   guitar?: GuitarInfo
   audio?: { mix: string; original: string; guitar: string }
   warnings?: { code: string; message: string }[]

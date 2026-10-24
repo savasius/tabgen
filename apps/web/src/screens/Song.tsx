@@ -13,10 +13,11 @@ import { NowNext } from '@/components/app/NowNext'
 import { ChordGrid } from '@/components/app/ChordGrid'
 import { Transport } from '@/components/app/Transport'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/dropdown'
-import { useApp } from '@/lib/store'
+import { useApp, type TKey } from '@/lib/store'
 import { sectionNames, shownChord, uniqueLabels } from '@/lib/display'
 import { chordKey, noteName, spellingForKey, transpose as transposeChord, type Level } from '@/music/chords'
 import { cn } from '@/lib/utils'
+import { partLabels, withPart } from '@/lib/parts'
 import { SongSessionProvider, soundingSpelling, useSong } from './song-session'
 
 export function SongLayout() {
@@ -47,14 +48,58 @@ export function SongLayout() {
   if (!analysis) {
     return <div className="p-10 text-center text-muted-foreground">{t('common.loading')}</div>
   }
+  return <SongWithParts analysis={analysis} setAnalysis={setAnalysis} />
+}
+
+function SongWithParts({ analysis, setAnalysis }: {
+  analysis: Awaited<ReturnType<typeof api.analysis>>
+  setAnalysis: (a: Awaited<ReturnType<typeof api.analysis>>) => void
+}) {
+  const [partId, setPartId] = useState<string | null>(null)
+  useEffect(() => { setPartId(null) }, [analysis.id])
+  const view = useMemo(() => withPart(analysis, partId), [analysis, partId])
   return (
-    <SongSessionProvider analysis={analysis} setAnalysis={setAnalysis}>
-      <SongChrome />
+    <SongSessionProvider analysis={view} setAnalysis={setAnalysis}>
+      <SongChrome partId={partId} setPartId={setPartId} parts={analysis.parts ?? []} />
     </SongSessionProvider>
   )
 }
 
-function SongChrome() {
+function PartPicker({ parts, partId, setPartId }: {
+  parts: NonNullable<Awaited<ReturnType<typeof api.analysis>>['parts']>
+  partId: string | null
+  setPartId: (id: string | null) => void
+}) {
+  const { t } = useApp()
+  const labels = partLabels(parts)
+  const roleSplit = parts.some((p) => p.split === 'role') && partId !== null
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="part-picker">
+      <span className="text-muted-foreground">{t('song.parts.label')}</span>
+      <Segmented<string>
+        size="sm"
+        value={partId ?? 'all'}
+        onChange={(v) => setPartId(v === 'all' ? null : v)}
+        options={[
+          { value: 'all', label: t('song.parts.all'), testId: 'part-all' },
+          ...labels.map((l) => ({
+            value: l.id,
+            testId: `part-${l.id}`,
+            label: `${t(`song.parts.${l.role}` as TKey)}${l.n ? ` ${l.n}` : ''} · ${t(`song.parts.side.${l.side}` as TKey)}`,
+          })),
+        ]}
+      />
+      <HelpTip content={t('song.parts.help')} />
+      {roleSplit && <span className="text-xs text-muted-foreground">{t('song.parts.roleSplit')}</span>}
+    </div>
+  )
+}
+
+function SongChrome({ parts, partId, setPartId }: {
+  parts: NonNullable<Awaited<ReturnType<typeof api.analysis>>['parts']>
+  partId: string | null
+  setPartId: (id: string | null) => void
+}) {
   const { t, settings } = useApp()
   const s = useSong()
   const a = s.analysis
@@ -115,6 +160,8 @@ function SongChrome() {
           </MenuContent>
         </Menu>
       </header>
+
+      {parts.length > 1 && <PartPicker parts={parts} partId={partId} setPartId={setPartId} />}
 
       {a.stale && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm">

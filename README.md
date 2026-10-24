@@ -60,8 +60,10 @@ upload / link ──▶ decode (ffmpeg, sha256 of PCM = cache key)
                  ├─ post: beat grid, maj/min flicker or missing-third notes → :5, key from chord hierarchy
                  ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX string/fret prior) → octave-clean
                  │    → split-bend merge → global Viterbi fingering (eval/fingering_fit.py)
-                 └─ techniques (bend from split notes, slide/H-P from contour glide + attack, vibrato)
-                      → 16th quantize → alphaTex (per-bar tempo) + MusicXML
+                 ├─ techniques (bend from split notes, slide/H-P from contour glide + attack, vibrato)
+                 │    → 16th quantize → alphaTex (per-bar tempo) + MusicXML
+                 └─ guitar parts: stereo-position split (or lead line vs comping) → one tab +
+                      chords per guitar (analysis.parts, audio?stem=guitar&part=s1)
 ```
 
 If Demucs fails, the job fails — the mix is never analyzed as guitar. A weak/empty guitar stem
@@ -106,6 +108,26 @@ yok; slide ve vibrato'nun yarısı kaçıyor. Distorsiyonlu, yankılı solo gita
 fazlası tab'da görünmeyebilir (perde doğru, bend işareti eksik). Yavaş şarkılarda vuruş takibi bazen iki kat tempo bulur
 (ör. Comfortably Numb 63 yerine 125 BPM) — tab okunur ama notalar sık görünür. Arka planda ritim
 gitarı da varsa (cover videoları) Demucs ikisini tek gitar stem'ine koyar. Ayrıntılı liste: `eval/REPORT.md`.
+
+## Birden fazla gitar (p2.5)
+
+Şarkıda birden fazla gitar varsa (ör. solda ritim, ortada solo) TabGen her birini ayrı bulur.
+Şarkı sayfasında **Gitar: Tüm gitarlar | Ritim gitar · sol | Solo gitar · orta** seçicisi çıkar.
+Birini seçince tab, akorlar ve **Gitar** sesi sadece o gitara geçer. Ritim gitarların akorları
+kendi seslerinden ayrıca çıkarılır.
+
+Nasıl ayırıyor: önce stereo konumdan (rock/pop kayıtlarında gitarlar genelde sola/sağa açılır,
+solo ortada durur). Hepsi ortadaysa notalardan: tek nota çizgisi = solo, akorlar = ritim.
+
+Ölçüm (`eval/REPORT.md` §7, cevabı bilinen GuitarSet sahneleri, ayarlarda kullanılmayan oyuncular):
+sol/sağa açılmış ritim + solo sahnelerinde gitar başına tab doğruluğu 0,23 → **0,66**
+(gitarlar ayrı kaydedilmiş olsaydı 0,69). Davul/bas ve Demucs ile 0,20 → 0,54. Gitar sayısı
+bu sahnelerde %100 doğru.
+
+Bilinen sınırlar: **ortada üst üste çalan iki gitarı** ayırmak hâlâ zayıf (0,24–0,38); iki kez
+kaydedilmiş ritim gitarlarında aynı akorlar ortada birleşip not kaybettiriyor. Tek gitarlı
+şarkılar tek kalır (kütüphanedeki üç şarkıda yanlış ayırma yok). Ölçüm akustik kayıtlarla
+yapıldı; gerçek rock miksleri, chorus/geniş delay gibi stereo efektleri henüz test edilmedi.
 
 ## Repo layout
 

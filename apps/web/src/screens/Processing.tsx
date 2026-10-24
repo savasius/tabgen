@@ -9,7 +9,7 @@ import { api, type Job } from '@/api'
 import { listTrackedJobs, untrackJob } from '@/lib/local'
 import { coverHue, cn } from '@/lib/utils'
 
-const ORDER = ['queued', 'fetching', 'decoding', 'separating', 'beats', 'sections', 'chords', 'key', 'transcribe', 'tab', 'finalizing'] as const
+const ORDER = ['queued', 'fetching', 'decoding', 'separating', 'beats', 'sections', 'chords', 'key', 'transcribe', 'tab', 'parts', 'finalizing'] as const
 
 export function Processing() {
   const { id = '' } = useParams()

@@ -35,6 +35,25 @@ Backend spec is `transcriber:cleaner:fingering` — transcribers are registered 
 checkout of the previous commit (`git worktree add ../tabgen-baseline <commit>`; the scripts fall
 back to the old APIs there).
 
+## Multi-guitar benchmark (p2.5)
+
+`eval/multi_bench.py` builds two- and three-guitar scenes from GuitarSet: every piece was
+recorded by six players to the same click, so one player's comping under another player's solo
+is a real arrangement with string/fret truth for each guitar. Layouts: both centred (`mono2`),
+rhythm left + lead centre (`lc2`), left/right (`lr2`), double-tracked rhythm + lead (`dbl3`),
+two rhythm guitars and no lead (`rr2`). Tune on `--split dev` (players 00/01/02), report on
+`--split test` (05/04/03).
+
+```bash
+PYTHONPATH=workers/analysis .venv/bin/python eval/multi_bench.py --split dev
+PYTHONPATH=workers/analysis .venv/bin/python eval/multi_bench.py --split test --dist-solo   # distorted lead
+PYTHONPATH=workers/analysis .venv/bin/python eval/multi_bench.py --split test --band --dist-solo --limit 10  # + drums/bass, Demucs
+```
+
+Metrics: `part_tab_f1` = mean over the real guitars of the tab F1 of the predicted part
+matched to it (unmatched guitar = 0), `count_ok`, `role_ok` (lead/rhythm label right and no
+lead invented), `assign` (correctly heard notes that landed in the right guitar's tab).
+
 ## Phase 1/2 smoke checks
 
 Audio files stay out of the repo. After analyzing a song:

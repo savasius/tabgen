@@ -1,4 +1,4 @@
-# Tab accuracy report — p2.3 → p2.4
+# Tab accuracy report — p2.3 → p2.4 → p2.5
 
 All numbers come from `eval/tab_bench.py`, `eval/technique_bench.py` and `eval/fingering_fit.py`
 (commands in [README.md](README.md)). "Before" = the previous commit's code (p2.3) run through the
@@ -132,6 +132,52 @@ four-finger exercise), analyzed from the Demucs guitar stem:
   (bars 16–18: `sl`, `b1`, `h`, `p`, `b½↓`): `docs/demo/tab-view-techniques.jpg`.
 - Orijinal | Gitar | Tab gitar switching keeps the playhead (checked in the browser while playing).
 
+## 7. Multi-guitar: one tab per guitar (p2.5)
+
+`eval/multi_bench.py`, held-out test split: GuitarSet player 04 comping, player 03 second comping,
+player 05 solo, over the same 30 pieces (all recorded to one click, so the parts fit together).
+Thresholds and weights were fitted on players 00/01/02 only. "One tab" = what the app did
+before (the whole guitar stem as one tab). "Separate tracks" = each guitar transcribed from its
+own clean recording, the ceiling for any separation.
+
+Mean tab F1 per real guitar (a guitar with no matching predicted part counts 0):
+
+| Scene | One tab (before) | **p2.5** | Separate tracks (ceiling) | Guitars counted right | Lead/rhythm label right |
+|---|---|---|---|---|---|
+| rhythm left + lead centre | 0.23 | **0.66** | 0.69 | 100% | 100% |
+| rhythm left + lead right | 0.23 | **0.65** | 0.69 | 100% | 100% |
+| rhythm L + rhythm R + lead centre | 0.13 | **0.47** | 0.69 | 100% | 97% |
+| two rhythm guitars L/R, no lead | 0.26 | **0.58** | 0.68 | 90% | 85% |
+| rhythm + lead both centred | 0.24 | **0.38** | 0.69 | 77% | 77% |
+| same, distorted lead: lead centre | 0.21 | **0.60** | 0.64 | 100% | 100% |
+| same, distorted lead: rhythm L+R + lead | 0.12 | **0.44** | 0.66 | 97% | 97% |
+| + drums/bass, through Demucs (10 pieces): rhythm L + lead C | 0.20 | **0.54** | 0.64 | 100% | 100% |
+| + drums/bass, through Demucs: rhythm L+R + lead | 0.13 | **0.43** | 0.67 | 100% | 100% |
+| + drums/bass, through Demucs: both centred | 0.16 | **0.24** | 0.64 | 60% | 70% |
+
+How it works (`workers/analysis/tabgen_analysis/parts.py`):
+- **Stereo position.** Every time-frequency bin of the stereo guitar stem gets a pan value; peaks of
+  the energy-weighted pan histogram (with a real dip between them) are guitars; soft masks
+  resynthesize each one, which then goes through the normal transcription + tab path. A note that is
+  a much quieter copy of a note in another guitar is mask leakage and is dropped; equal-loudness
+  copies are real doubling and kept.
+- **Lead or rhythm.** Among panned guitars, at most one is the lead: the most "single-note line,
+  high, no strums" one, if ≥75% of its onsets are single notes and it stands out from the next.
+- **No stereo cue.** If the stem has one stereo position but looks like a lead line over comping,
+  a Viterbi pass assigns each onset's top note to a monophonic lead line or to the rhythm.
+
+Single-guitar songs stay single: the three real songs in the library (Comfortably Numb cover,
+Echoes tutorial, finger exercise) all come out as one guitar.
+
+What it can't do yet:
+- **Two guitars in the centre** (no stereo cue) is the weak case: 0.38 clean, 0.24 after Demucs. The
+  note-level split cannot recover what transcribing both guitars at once loses (all-notes tab F1
+  0.51 on the mix vs 0.67 from separate tracks). This needs a real same-instrument separation model.
+- **Double-tracked rhythm** loses notes to the centre: where both sides play the same chord the bin
+  looks centred. 0.47 vs 0.69 ceiling.
+- The scenes are acoustic GuitarSet guitars (plus synthetic distortion); real rock mixes, reverb and
+  stereo effects (chorus, wide delays) are untested here. Please add your own multi-guitar songs.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch
@@ -142,8 +188,8 @@ four-finger exercise), analyzed from the Demucs guitar stem:
    (e.g. a monophonic f0 model on the lead stem) instead of reading Basic Pitch's note split.
 3. **Beat grid on slow songs** can lock to double time (Comfortably Numb: 125 instead of 63 BPM), so
    bars look twice as dense. Fold rule should consider bar length vs. chord-change rate.
-4. **Rhythm + lead in one stem.** Covers with a backing guitar put both parts in Demucs' guitar stem.
-   A lead/rhythm split (or two-voice tab) is the next UX win.
+4. **Rhythm + lead in one stem.** p2.5 splits them by stereo position, or by lead line vs comping
+   when both are centred (§7). Centred guitars remain weak (0.24–0.38 per-guitar tab F1).
 5. **Hammer-on / pull-off accuracy is unmeasured** — no public labeled set was found. Precision on
    picked material is now high; recall is unknown.
 6. **Slide precision ~0.6, recall ~0.4** — slides are often confused with vibrato wobble or a re-pick; a small

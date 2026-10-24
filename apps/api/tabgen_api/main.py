@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tabgen_analysis import PIPELINE_VERSION, config, pipeline
+from tabgen_analysis.stages import guitar_parts
 from tabgen_analysis.stages.separate import resolve_playback, stems_dir
 
 STEM_NAMES = ("guitar", "vocals", "bass", "drums", "piano", "other", "harmonic")
@@ -148,7 +149,7 @@ def patch_analysis(analysis_id: str, body: LibraryPatch):
     return library.update(analysis_id, **fields) or library.upsert(analysis_id, fields) or library.get(analysis_id)
 
 
-@app.get("/v1/analyses/{analysis_id}/stems/{name}")
+@app.api_route("/v1/analyses/{analysis_id}/stems/{name}", methods=["GET", "HEAD"])
 def get_stem(analysis_id: str, name: str):
     """Alias for isolated Demucs stems. Guitar matches `audio?stem=guitar`."""
     _analysis_file(analysis_id)
@@ -169,10 +170,20 @@ def get_stem(analysis_id: str, name: str):
     return FileResponse(p, media_type="audio/wav", filename=f"{analysis_id}-{kind}.wav")
 
 
-@app.get("/v1/analyses/{analysis_id}/audio")
-def get_audio(analysis_id: str, stem: str = Query("mix", description="mix | original | guitar")):
-    """Full mix, or `?stem=guitar` for the isolated Demucs guitar stem (PR #3)."""
+@app.api_route("/v1/analyses/{analysis_id}/audio", methods=["GET", "HEAD"])
+def get_audio(analysis_id: str, stem: str = Query("mix", description="mix | original | guitar"),
+              part: str | None = Query(None, description="one guitar of the stem, e.g. s1")):
+    """Full mix, or `?stem=guitar` for the isolated Demucs guitar stem (PR #3).
+
+    `&part=s1` plays one guitar split out of that stem by stereo position (analysis.parts)."""
     _analysis_file(analysis_id)
+    if part is not None:
+        if not part.isalnum():
+            raise HTTPException(400, "Bad part id")
+        p = guitar_parts.part_audio_path(analysis_id, part)
+        if not p.exists():
+            raise HTTPException(404, "No such guitar part — reanalyze this song")
+        return FileResponse(p, media_type="audio/wav")
     try:
         path, media = resolve_playback(config.track_dir(analysis_id), stem)
     except ValueError as e:

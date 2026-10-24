@@ -104,6 +104,7 @@ export const en: Dict = {
       key: "Checking key and tuning",
       transcribe: "Transcribing the guitar",
       tab: "Writing guitar tab",
+      parts: "Telling the guitars apart",
       finalizing: "Finishing touches",
     },
     stageHint: {
@@ -188,6 +189,15 @@ export const en: Dict = {
     tuningFix: "Pitch audio to standard tuning",
     stale: "This song was analyzed with an older engine. Reanalyze for the new tab engine (better string/fret choice, bend/slide detection) — the guitar stem is cached, so Demucs does not run again.",
     transcribeFailed: "Note transcription failed; this tab is only a chord-shape guess. Re-run setup (./scripts/setup.sh) and reanalyze.",
+    parts: {
+      label: "Guitar",
+      all: "All guitars",
+      lead: "Lead guitar",
+      rhythm: "Rhythm guitar",
+      side: { left: "left", centre: "centre", right: "right" },
+      help: "More than one guitar was found. Pick one and the tab, chords and Guitar audio switch to it. Parts are split by stereo position (left/centre/right) or lead line vs comping; guitars stacked in the centre can mix.",
+      roleSplit: "These two parts were split from one audio channel: Guitar audio plays both together.",
+    },
     guitarWarning: "Guitar stem is weak or almost empty. Chords and tabs still used the isolated guitar, not the mix.",
     reanalyze: "Reanalyze",
     playerLabel: "Player",

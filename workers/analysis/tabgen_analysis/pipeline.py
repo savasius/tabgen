@@ -15,6 +15,7 @@ from .cache import cached_json, write_json_atomic
 from .device import run_with_timeout
 from .stages import beats as beats_stage
 from .stages import chords as chords_stage
+from .stages import guitar_parts
 from .stages import key as key_stage
 from .stages import post, separate, structure
 from .stages import tabs as tabs_stage
@@ -46,6 +47,10 @@ def tab_musicxml_path(audio_hash: str) -> Path:
 
 def tab_alphatex_path(audio_hash: str) -> Path:
     return config.track_dir(audio_hash) / f"tab@{config.PIPELINE_VERSION}.alphatex"
+
+
+def part_musicxml_path(audio_hash: str, part_id: str) -> Path:
+    return config.track_dir(audio_hash) / f"tab@{config.PIPELINE_VERSION}.{part_id}.musicxml"
 
 
 def choose_beat_grid(bt: dict, aio: dict) -> tuple[dict, str]:
@@ -185,6 +190,42 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     tab.setdefault("stats", {})["guitar_source"] = guitar.source
     tab["stats"]["guitar_rms"] = round(float(guitar.rms), 5)
 
+    # Several guitars in the stem (panned apart, or a lead line over comping): one tab each.
+    # The whole-stem tab above stays as "all guitars" so older clients keep working.
+    progress("parts", 93)
+    found = timed("parts", lambda: guitar_parts.find_parts(
+        audio_hash, guitar_path, raw_notes, list(STANDARD_TUNING)), required=False, default=[])
+    parts_out = []
+    for part in guitar_parts.order(found or []):
+        pchords, pgrid = merged, None
+        if part["split"] == "stereo" and part["role"] != "lead":
+            praw = cached_json(
+                audio_hash, f"{recognizer.key}-src-{part['tag']}",
+                lambda part=part: chords_stage.recognize(part["audio"], recognizer))
+            labels = post.collapse_power_qualities(post.chord_per_beat(praw, intervals))
+            labels = post.collapse_missing_thirds(labels, intervals, part["raw"]["notes"])
+            pgrid, _b, _ts, pchords = post.rebuild_after_labels(
+                beats, labels, intervals, struct.get("segments") or [], duration)
+        ptab = timed(f"tab-{part['id']}", lambda part=part, pchords=pchords: tabs_stage.build_tab(
+            part["raw"], beats=beats["beats"], bars=bars, sections=sections, chords=pchords,
+            duration=duration, bpm=beats["bpm"], ts=ts, title=title, guitar_path=part["audio"], capo=0,
+        ), required=False, default=None)
+        if not ptab:
+            continue
+        pxml = ptab.pop("musicxml", None)
+        if pxml:
+            part_musicxml_path(audio_hash, part["id"]).write_text(pxml)
+        parts_out.append({
+            "id": part["id"], "role": part["role"], "pan": part["pan"],
+            "side": guitar_parts.pan_label(part["pan"]), "share": part["share"], "split": part["split"],
+            "chords": pchords, "grid": pgrid, "chords_source": "part" if pgrid else "song",
+            "audio": (f"/v1/analyses/{audio_hash}/audio?stem=guitar&part={part['id']}"
+                      if part["split"] == "stereo" else f"/v1/analyses/{audio_hash}/audio?stem=guitar"),
+            "tab": ptab,
+        })
+    if len(parts_out) < 2:
+        parts_out = []
+
     warnings = []
     if not raw_notes.get("model"):
         # Never silent: without notes the tab is chord-shape guesswork (this is what a broken
@@ -217,6 +258,7 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "grid": grid,
         "bars": bars,
         "tab": {k: v for k, v in tab.items() if k != "musicxml"},
+        "parts": parts_out,
         "raw_chords": raw_chords,
         "guitar": {
             "source": guitar.source,
@@ -235,7 +277,8 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "warnings": warnings,
         "models": {"separation": separate.MODEL_NAME, "beats": beats_stage.MODEL_KEY,
                    "sections": structure.MODEL_KEY, "chords": recognizer.key, "chord_input": src_tag,
-                   "key": key_stage.MODEL_KEY, "tab": transcribe_stage.MODEL_KEY, "device": config.DEVICE,
+                   "key": key_stage.MODEL_KEY, "tab": transcribe_stage.MODEL_KEY,
+                   "parts": guitar_parts.MODEL_KEY, "device": config.DEVICE,
                    "demucs_device": config.demucs_device(), "guitar_source": guitar.source,
                    "separation_method": sep_method},
         "timings": timings,

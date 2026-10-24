@@ -115,6 +115,7 @@ export const tr = {
       key: "Ton ve akort kontrol ediliyor",
       transcribe: "Gitar notaları çıkarılıyor",
       tab: "Gitar tab'ı yazılıyor",
+      parts: "Gitarlar birbirinden ayrılıyor",
       finalizing: "Son dokunuşlar",
     },
     stageHint: {
@@ -199,6 +200,15 @@ export const tr = {
     tuningFix: "Sesi standart akorda çek",
     stale: "Bu şarkı eski motorla analiz edilmiş. Yeni tab motoru (daha doğru tel/perde, bend/slide algılama) için yeniden analiz et — gitar stem’i önbellekte, Demucs tekrar çalışmaz.",
     transcribeFailed: "Nota çıkarma başarısız oldu; bu tab sadece akor şekillerinden tahmin. Kurulumu yeniden çalıştır (./scripts/setup.sh) ve yeniden analiz et.",
+    parts: {
+      label: "Gitar",
+      all: "Tüm gitarlar",
+      lead: "Solo gitar",
+      rhythm: "Ritim gitar",
+      side: { left: "sol", centre: "orta", right: "sağ" },
+      help: "Şarkıda birden fazla gitar bulundu. Birini seçince tab, akorlar ve Gitar sesi sadece o gitara geçer. Ayırma stereo konumdan (sol/orta/sağ) ya da solo çizgi ile ritmin farkından yapılır; ortada üst üste çalan gitarlarda karışabilir.",
+      roleSplit: "Bu iki partı aynı ses kanalından ayırdık: Gitar sesi ikisini birlikte çalar.",
+    },
     guitarWarning: "Gitar partisyonu zayıf veya neredeyse boş. Akor ve tab yine de miks değil, izole gitar üzerinden hesaplandı.",
     reanalyze: "Yeniden analiz et",
     playerLabel: "Oynatıcı",
