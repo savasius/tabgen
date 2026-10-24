@@ -26,3 +26,7 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# alphaTab assets copied in by @coderline/alphatab-vite at build time
+apps/web/public/font/
+apps/web/public/soundfont/
