@@ -224,6 +224,7 @@ def to_alphatex(
     ]
     grid = sixteenth_times(beats, duration)
     cur_tempo = max(1, int(round(bpm)))
+    cur_ts = int(beats_n) if str(beats_n).isdigit() else 4
 
     for bar in bars:
         beat_ids = bar.get("beats") or []
@@ -276,7 +277,14 @@ def to_alphatex(
         if parts and abs(bar_tempo - cur_tempo) >= max(2, 0.02 * cur_tempo):
             parts[0] = _with_beat_effect(parts[0], f"tempo {bar_tempo}")
             cur_tempo = bar_tempo
-        lines.append(" ".join(parts) + " |")
+        # A bar with more or fewer beats than the time signature (pickups, a missed downbeat)
+        # gets its own signature: alphaTab otherwise starts the next bar after the nominal
+        # length, and the tab / Tab-gitar timeline drifts from the recording.
+        head = ""
+        if nbeats != cur_ts:
+            head = f"\\ts {nbeats} {beat_unit} "
+            cur_ts = nbeats
+        lines.append(head + " ".join(parts) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -326,8 +334,9 @@ def to_musicxml(
             attr = SubElement(measure, "attributes")
             SubElement(attr, "divisions").text = str(divisions)
             time = SubElement(attr, "time")
-            SubElement(time, "beats").text = str(nbeats if nbeats in (2, 3, 4, 5, 6) else beats_n)
+            SubElement(time, "beats").text = str(nbeats)
             SubElement(time, "beat-type").text = str(beat_unit)
+            cur_beats = nbeats
             clef = SubElement(attr, "clef")
             SubElement(clef, "sign").text = "TAB"
             SubElement(clef, "line").text = "5"
@@ -346,6 +355,13 @@ def to_musicxml(
             met = SubElement(dt, "metronome")
             SubElement(met, "beat-unit").text = "quarter"
             SubElement(met, "per-minute").text = str(int(round(bpm)))
+        elif nbeats != cur_beats:
+            # irregular bar (pickup, missed downbeat): its own signature keeps it in time
+            attr = SubElement(measure, "attributes")
+            time = SubElement(attr, "time")
+            SubElement(time, "beats").text = str(nbeats)
+            SubElement(time, "beat-type").text = str(beat_unit)
+            cur_beats = nbeats
         s0 = (beat_ids[0] if beat_ids else 0) * SUBDIV
         nslots = nbeats * SUBDIV
         i = 0

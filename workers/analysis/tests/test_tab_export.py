@@ -161,3 +161,19 @@ def test_pull_off_is_h_in_alphatex_never_p():
     ]
     tex = to_alphatex(notes, BARS, BEATS, 2.0)
     assert "8.1{h}" in tex and "{p" not in tex
+
+
+def test_irregular_bars_get_their_own_time_signature():
+    # 4 + 6 + 4 beats at 120 BPM: the 6-beat bar must not be squeezed into 4/4
+    beats = [i * 0.5 for i in range(14)]
+    bars = [{"index": 0, "start": 0.0, "end": 2.0, "beats": [0, 1, 2, 3]},
+            {"index": 1, "start": 2.0, "end": 5.0, "beats": list(range(4, 10))},
+            {"index": 2, "start": 5.0, "end": 7.0, "beats": [10, 11, 12, 13]}]
+    notes = [{"start": 2.0, "end": 2.4, "midi": 52, "string": 5, "fret": 2, "techniques": []}]
+    tex = to_alphatex(notes, bars, beats, 7.0, bpm=120)
+    body = tex.split("\n.\n", 1)[1].splitlines()
+    assert body[1].startswith("\\ts 6 4 ")
+    assert body[2].startswith("\\ts 4 4 ")
+    assert "\\ts" not in body[0]
+    xml = to_musicxml(notes, bars, beats, 7.0, bpm=120)
+    assert xml.count("<beats>6</beats>") == 1 and xml.count("<beats>4</beats>") == 2

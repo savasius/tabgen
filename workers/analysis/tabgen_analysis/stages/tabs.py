@@ -169,6 +169,8 @@ def build_tab(
         row = {
             "start": n["start"], "end": n["end"],
             "qstart": n.get("qstart"), "qend": n.get("qend"),
+            # heard onset before grid snapping (eval scores timing on this, not the 16th grid)
+            "t0": round(float(n.get("orig_start", n["start"])), 4),
             "midi": n["midi"], "string": n["string"], "fret": n["fret"],
             "velocity": n.get("velocity"), "confidence": n.get("confidence"),
             "low_confidence": bool(n.get("low_confidence")),

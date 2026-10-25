@@ -54,6 +54,15 @@ Metrics: `part_tab_f1` = mean over the real guitars of the tab F1 of the predict
 matched to it (unmatched guitar = 0), `count_ok`, `role_ok` (lead/rhythm label right and no
 lead invented), `assign` (correctly heard notes that landed in the right guitar's tab).
 
+## Real songs against a trusted tab (`eval/real_bench.py`)
+
+Put `audio.*` + `ref.*` (Guitar Pro 3-7 / GPX / MusicXML / alphaTex, converted by
+`eval/real/score2json.mjs` with the app's alphaTab, repeats unrolled) in
+`data/eval/real/<name>/`. The reference is aligned to the recording: chroma DTW (pinned or open
+ends, whichever fits the recording's onsets better) -> robust line -> per-6 s offset on the onset
+envelope. `eval/real/make_qa.py` builds QA songs with known answers (GuitarSet clips shifted 1.5 s
+and slowed 4%, the 3-guitar demo): alignment error <= 35 ms on all of them.
+
 ## Phase 1/2 smoke checks
 
 Audio files stay out of the repo. After analyzing a song:

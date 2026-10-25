@@ -129,6 +129,26 @@ kaydedilmiş ritim gitarlarında aynı akorlar ortada birleşip not kaybettiriyo
 şarkılar tek kalır (kütüphanedeki üç şarkıda yanlış ayırma yok). Ölçüm akustik kayıtlarla
 yapıldı; gerçek rock miksleri, chorus/geniş delay gibi stereo efektleri henüz test edilmedi.
 
+## Kendi şarkılarınla ölçüm
+
+TabGen'in senin şarkılarında ne kadar doğru olduğunu görmek için, güvendiğin bir tab'ı (Guitar Pro
+`.gp/.gp5/.gpx`, MusicXML veya alphaTex) şarkının ses dosyasıyla yan yana koy:
+
+```
+data/eval/real/<şarkı-adı>/audio.mp3      (ya da .m4a / .wav / .flac)
+data/eval/real/<şarkı-adı>/ref.gp5        (doğru tab)
+data/eval/real/<şarkı-adı>/meta.json      (isteğe bağlı: {"tracks": [0, 2]} = hangi izler gitar)
+```
+
+```bash
+PYTHONPATH=workers/analysis:apps/api .venv/bin/python eval/real_bench.py
+```
+
+Tab ile kayıt aynı hızda başlamaz (giriş, sayım, canlı kayıtta tempo kayması); araç tab'ı kayda
+otomatik hizalar (test kayıtlarında 35 ms içinde). Sonuç: notaların ve tel/perdenin ne kadarı doğru,
+her gitar ayrı ayrı, tempo doğru mu (2.0 = iki kat), ölçü çizgileri yerinde mi. Bu klasör git'e
+girmez; şarkılar sadece senin bilgisayarında kalır.
+
 ## Repo layout
 
 ```

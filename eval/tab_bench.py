@@ -94,15 +94,22 @@ def _distort(y: np.ndarray, sr: int) -> np.ndarray:
     return (0.8 * cab / (np.abs(cab).max() + 1e-9)).astype(np.float32)
 
 
-def _band(sr: int, n: int, notes: list[dict], seed: int) -> np.ndarray:
-    """Rights-free backing: kick/snare/hat on the clip's beats + sine bass on chord roots + a pad."""
+def _band(sr: int, n: int, notes: list[dict], seed: int, beats: list[float] | None = None) -> np.ndarray:
+    """Rights-free backing: kick/snare/hat + sine bass on chord roots + a pad.
+
+    Without `beats` the drums run at a fixed 100 BPM (a distractor for note tests only; any beat
+    or tempo check needs the clip's real beats, else the tracker rightly follows the drums)."""
     rng = np.random.default_rng(seed)
     out = np.zeros(n, np.float64)
     t = np.arange(n) / sr
     dur = n / sr
     # drums at ~ the guitar's note density tempo (beats from notes are fine for distraction)
-    bpm = 100.0
-    for k, bt in enumerate(np.arange(0, dur, 60 / bpm / 2)):
+    if beats is not None and len(beats) > 1:
+        bs = np.asarray(beats, float)
+        grid = np.sort(np.concatenate([bs, (bs[:-1] + bs[1:]) / 2]))  # eighth notes
+    else:
+        grid = np.arange(0, dur, 60 / 100.0 / 2)
+    for k, bt in enumerate(grid):
         a = int(bt * sr)
         L = min(n - a, int(0.25 * sr))
         if L <= 0:
