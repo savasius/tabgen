@@ -27,6 +27,9 @@ interface CardSong {
   favorite: boolean
   source?: string
   jobId?: string
+  stale?: boolean
+  guitars?: number
+  edited?: boolean
 }
 
 export function Library() {
@@ -80,6 +83,9 @@ export function Library() {
       lastPlayed: played[e.id],
       favorite: favs.includes(e.id),
       source: e.source,
+      stale: e.stale,
+      guitars: e.guitars,
+      edited: e.edited,
     }))
     const processing: CardSong[] = jobs.map((j) => ({
       id: j.job?.analysis_id || j.id,
@@ -241,9 +247,15 @@ function SongCard({ song, compact, onFav }: { song: CardSong; compact?: boolean;
             {song.favorite && <Heart className="size-4 shrink-0 fill-primary text-primary" />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge variant={song.status === 'failed' ? 'danger' : song.status === 'done' ? 'success' : 'primary'}>
-              {statusLabel(song, t)}
+            <Badge variant={song.status === 'failed' ? 'danger' : song.status === 'done' ? (song.stale ? 'warning' : 'success') : 'primary'}>
+              {song.status === 'done' && song.stale ? t('library.stale') : statusLabel(song, t)}
             </Badge>
+            {song.status === 'done' && (song.guitars ?? 1) > 1 && (
+              <Badge variant="outline" data-testid="card-guitars">{t('library.guitars', { n: song.guitars! })}</Badge>
+            )}
+            {song.status === 'done' && song.edited && (
+              <Badge variant="outline" data-testid="card-edited">{t('library.edited')}</Badge>
+            )}
           </div>
         </div>
       </button>

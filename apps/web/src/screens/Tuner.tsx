@@ -159,7 +159,7 @@ export function Tuner() {
         <Button className="mt-4 w-full" onClick={() => start.current()}>{t('tuner.startMic')}</Button>
       )}
 
-      <div className="relative mx-auto mt-8 h-52 w-full max-w-sm" data-testid="tuner-gauge">
+      <div className="mx-auto mt-8 w-full max-w-sm" data-testid="tuner-gauge">
         <svg viewBox="0 0 200 110" className="w-full">
           <path d="M10 100 A90 90 0 0 1 190 100" className="fill-none stroke-border" strokeWidth="10" />
           <path d="M10 100 A90 90 0 0 1 190 100" className="fill-none stroke-success" strokeWidth="10" strokeDasharray="12 400" strokeDashoffset="-135.4" />
@@ -181,7 +181,7 @@ export function Tuner() {
           />
           <circle cx="100" cy="100" r="6" className="fill-foreground" />
         </svg>
-        <div className="absolute inset-x-0 top-24 text-center">
+        <div className="mt-2 text-center">
           <p className={cn('text-5xl font-semibold', locked && 'text-success')} data-testid="tuner-note">{label}</p>
           <p className="font-mono text-sm tabular text-muted-foreground" data-testid="tuner-cents">
             {reading ? `${cents > 0 ? '+' : ''}${cents.toFixed(0)} ¢ · ${reading.hz.toFixed(1)} Hz` : '— ¢'}

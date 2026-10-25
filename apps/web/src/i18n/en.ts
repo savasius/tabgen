@@ -39,6 +39,9 @@ export const en: Dict = {
     filters: { all: "All", ready: "Ready", processing: "Preparing", favorites: "Favorites" },
     status: { queued: "Queued", processing: "Preparing · {p}%", done: "Ready", failed: "Failed" },
     source: { file: "File", youtube: "YouTube", mic: "Mic" },
+    stale: "Reanalyze",
+    guitars: "{n} guitars",
+    edited: "Fixed by hand",
     hasTab: "Has tab",
     tip: "Tip: long-press or right-click a song card to rename or re-analyze.",
     rename: "Rename",
@@ -187,7 +190,7 @@ export const en: Dict = {
     lyricsMissing: "Lyrics aren't supported yet",
     tuningOff: "The song is {c} cents flat. Tune your guitar the same or correct the audio.",
     tuningFix: "Pitch audio to standard tuning",
-    stale: "This song was analyzed with an older engine. Reanalyze for the new tab engine (better string/fret choice, bend/slide detection) — the guitar stem is cached, so Demucs does not run again.",
+    stale: "This song was analysed with an older engine. Reanalyze for a more accurate tab, separate guitars and bar/tempo fixes. The guitar stem is cached (Demucs won’t run again) and your hand fixes are kept.",
     transcribeFailed: "Note transcription failed; this tab is only a chord-shape guess. Re-run setup (./scripts/setup.sh) and reanalyze.",
     chordEdit: {
       title: "Chord",

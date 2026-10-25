@@ -125,7 +125,15 @@ export interface Job {
   error: string | null
 }
 
-export interface LibraryEntry { id: string; title?: string; artist?: string; source?: string; updated_at?: number }
+export interface LibraryEntry {
+  id: string; title?: string; artist?: string; source?: string; updated_at?: number
+  /** analysed with an older engine */
+  stale?: boolean
+  /** guitars found in the stem (1 = one tab) */
+  guitars?: number
+  /** has hand corrections */
+  edited?: boolean
+}
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
 

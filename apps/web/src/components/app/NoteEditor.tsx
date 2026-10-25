@@ -86,7 +86,7 @@ export function NoteEditor({
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('tab.legendTitle')}>
+      <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-1" role="group" aria-label={t('tab.legendTitle')}>
         {toggles.map((x) => {
           const on = has(x.type, x.extra)
           return (
@@ -105,16 +105,16 @@ export function NoteEditor({
             </button>
           )
         })}
-      </div>
-
-      <div className="ml-auto flex items-center gap-1">
-        <Button size="icon-sm" variant="outline" onClick={onDelete} data-testid="edit-delete"
-          title={t('tab.edit.delete')} aria-label={t('tab.edit.delete')}>
-          <Trash2 className="size-3.5" />
-        </Button>
-        <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label={t('tab.edit.close')}>
-          <X className="size-4" />
-        </Button>
+        {/* actions stay on the technique row, so the editor is two rows on a phone */}
+        <span className="ml-auto flex items-center gap-1 pl-1">
+          <Button size="icon-sm" variant="outline" onClick={onDelete} data-testid="edit-delete"
+            title={t('tab.edit.delete')} aria-label={t('tab.edit.delete')}>
+            <Trash2 className="size-3.5" />
+          </Button>
+          <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label={t('tab.edit.close')}>
+            <X className="size-4" />
+          </Button>
+        </span>
       </div>
     </div>
   )

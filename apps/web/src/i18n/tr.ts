@@ -50,6 +50,9 @@ export const tr = {
       failed: "Olmadı",
     },
     source: { file: "Dosya", youtube: "YouTube", mic: "Mikrofon" },
+    stale: "Yeniden analiz et",
+    guitars: "{n} gitar",
+    edited: "Düzeltildi",
     hasTab: "Tab var",
     tip: "İpucu: Bir şarkı kartını basılı tut ya da sağ tıkla — yeniden adlandır, tekrar analiz et.",
     rename: "Yeniden adlandır",
@@ -198,7 +201,7 @@ export const tr = {
     lyricsMissing: "Söz desteği henüz yok",
     tuningOff: "Şarkı {c} cent pes. Gitarını aynı şekilde akort et ya da sesi düzelt.",
     tuningFix: "Sesi standart akorda çek",
-    stale: "Bu şarkı eski motorla analiz edilmiş. Yeni tab motoru (daha doğru tel/perde, bend/slide algılama) için yeniden analiz et — gitar stem’i önbellekte, Demucs tekrar çalışmaz.",
+    stale: "Bu şarkı eski motorla analiz edilmiş. Yeniden analiz et: daha doğru tab, birden fazla gitarı ayırma ve ölçü/tempo düzeltmeleri gelir. Gitar stem’i önbellekte, Demucs tekrar çalışmaz; elle yaptığın düzeltmeler korunur.",
     transcribeFailed: "Nota çıkarma başarısız oldu; bu tab sadece akor şekillerinden tahmin. Kurulumu yeniden çalıştır (./scripts/setup.sh) ve yeniden analiz et.",
     chordEdit: {
       title: "Akor",

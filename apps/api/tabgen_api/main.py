@@ -79,8 +79,15 @@ def get_job(job_id: str):
 def list_analyses():
     out = []
     for e in library.list_recent():
-        if pipeline.find_analysis(e["id"]) or (config.track_dir(e["id"]) / "mix.wav").exists():
-            out.append(e)
+        found = pipeline.find_analysis(e["id"])
+        if not found and not (config.track_dir(e["id"]) / "mix.wav").exists():
+            continue
+        summary_p = config.track_dir(e["id"]) / "summary.json"
+        summary = json.loads(summary_p.read_text()) if summary_p.exists() else {}
+        version = found.stem.split("@", 1)[-1] if found else None
+        out.append({**e, "stale": bool(version and version != PIPELINE_VERSION),
+                    "guitars": summary.get("guitars", 1) if summary.get("version") == version else 1,
+                    "edited": edits.edits_path(e["id"]).exists()})
     return out
 
 
