@@ -6,7 +6,7 @@ import torch
 # p2.3: chords + key + tabs always on the isolated guitar stem (never mix / harmonic).
 # p2.4: global Viterbi fingering, split-bend merge, stricter legato, export keeps every onset,
 #       per-bar tempo in alphaTex (tab synth follows the recording).
-PIPELINE_VERSION = "p2.5-parts1-tabv3-guitarstem-bt1.1-aio3.1-lvc1.1-skey-bp-tabcnn"
+PIPELINE_VERSION = "p2.6-tempo2-parts1-tabv3-guitarstem-bt1.1-aio3.1-lvc1.1-skey-bp-tabcnn"
 
 DATA_DIR = Path(os.environ.get("TABGEN_DATA_DIR", Path(__file__).resolve().parents[3] / "data"))
 

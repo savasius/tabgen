@@ -1,4 +1,4 @@
-# Tab accuracy report — p2.3 → p2.4 → p2.5
+# Tab accuracy report — p2.3 → p2.4 → p2.5 → p2.6
 
 All numbers come from `eval/tab_bench.py`, `eval/technique_bench.py` and `eval/fingering_fit.py`
 (commands in [README.md](README.md)). "Before" = the previous commit's code (p2.3) run through the
@@ -178,6 +178,54 @@ What it can't do yet:
 - The scenes are acoustic GuitarSet guitars (plus synthetic distortion); real rock mixes, reverb and
   stereo effects (chorus, wide delays) are untested here. Please add your own multi-guitar songs.
 
+## 8. p2.6: real-song eval, tempo octave, tuner, play-along
+
+**Real-song eval (`eval/real_bench.py`).** Scores TabGen against a trusted Guitar Pro / MusicXML /
+alphaTex tab of your own recording, aligned automatically (chroma DTW -> robust line -> per-window
+onset refinement). QA with known answers (`eval/real/make_qa.py`): alignment error <= 35 ms on a
+clip shifted 1.5 s and slowed 4%, on repetitive comping and on the 3-guitar mix (before the fix:
+100 ms to 4 s). It also caught an export bug: bars with more/fewer beats than the time signature
+were written into 4/4, so alphaTab (and Tab gitar) slipped; every library song had such bars
+(Echoes: 14). Feeding our own tab back as the reference went 0.68 -> 0.90 note F1 after the fix.
+
+**Tempo octave (`eval/tempo_bench.py`, GuitarSet player 05, 30 pieces, 68-200 BPM).** Share of
+clips counted at the right beat level:
+
+| Set | p2.5 | p2.6 |
+|---|---|---|
+| Comping, guitar only | 0.80 | **0.90** |
+| Comping + drums/bass (drums on the real beats), through Demucs | 0.90 | **0.93** |
+| Solo lines, guitar only (no drums) | 0.57 | 0.53 |
+
+Two narrow changes, chosen on all three sets: the "I'm Yours" half-time switch is skipped when
+the half-time grid would hold > 4 played notes per beat (fast bossa/jazz comping came out at half
+speed), and doubling starts below 65 BPM instead of 70 (a 68 BPM ballad was doubled). Rejected
+after measuring: a candidate scorer (tempo prior + notes per beat + agreement) — 0.04 on held-out
+solos; a "both trackers agree on a slow tempo" rule — broke solos. Unaccompanied solos fail mostly
+with 3:2 errors no octave rule can fix. **Comfortably Numb stays at 125 BPM** (true ~63): both
+trackers report 125 and none of these cues separates it from a real 125.
+
+**Tuner.** IDMT dataset1, 312 real electric-guitar notes (`apps/web/src/lib/pitch.real.test.ts`):
+right note 100% (old 100%); a true 7-cent change read with 0.01 cent median error (old 4.0; the
+old whole-sample detector missed it entirely on 1 note in 10).
+
+**Play-along chords.** GuitarSet comping, tuned on player 01, reported on player 05
+(`apps/web/src/lib/playalong.real.test.ts`), share of beats marked green:
+
+| Style | Played right | Played a wrong chord |
+|---|---|---|
+| Singer-songwriter | 0.88 | 0.03 |
+| Rock | 0.74 | 0.05 |
+| Funk | 0.56 | 0.09 |
+| Bossa | 0.40 | 0.13 |
+| Jazz | 0.30 | 0.11 |
+
+Browser check with a synthetic player following the chords: 100% over 23 beats; a wrong chord 0%.
+
+**Hand edits** (no metric): note/chord fixes are stored apart from the analysis, survive
+reanalysis, and drive Tab gitar playback and exports. Checked end to end in the browser: fret,
+string move (pitch kept), technique, add, delete, keyboard, revert, chord per beat/bar.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch
@@ -186,8 +234,9 @@ What it can't do yet:
 2. **Bends on distorted, reverb-heavy leads.** Bend recall is ~0.45 on IDMT and visibly lower on the
    Comfortably Numb cover. Needs a pitch tracker that follows one string through the bend
    (e.g. a monophonic f0 model on the lead stem) instead of reading Basic Pitch's note split.
-3. **Beat grid on slow songs** can lock to double time (Comfortably Numb: 125 instead of 63 BPM), so
-   bars look twice as dense. Fold rule should consider bar length vs. chord-change rate.
+3. **Beat grid on slow songs** can still lock to double time when both trackers agree on it
+   (Comfortably Numb: 125 instead of 63). p2.6 fixed the 68 BPM and fast-jazz cases (§8); this one
+   needs a learned beat-level model or the user's tap tempo. Unaccompanied solos: 0.53 right.
 4. **Rhythm + lead in one stem.** p2.5 splits them by stereo position, or by lead line vs comping
    when both are centred (§7). Centred guitars remain weak (0.24–0.38 per-guitar tab F1).
 5. **Hammer-on / pull-off accuracy is unmeasured** — no public labeled set was found. Precision on
@@ -196,4 +245,6 @@ What it can't do yet:
    learned transition classifier (IDMT + synthetic) would help.
 7. **Fingering still ~30% wrong on electric licks** where several positions are equally playable.
    TabCNN's prior is the main audio cue; a timbre-based string classifier would close more of it.
-8. Manual note/chord editing, MusicXML/GP export polish, mic play-along — not started in this pass.
+8. Editing, tuner and play-along exist (p2.6). Play-along is weak on jazz/bossa voicings and needs
+   headphones; there is no Guitar Pro export yet; nobody has scored TabGen on a real commercial
+   song with a trusted tab — `eval/real_bench.py` is ready for that, it needs the songs.

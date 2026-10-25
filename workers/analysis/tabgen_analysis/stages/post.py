@@ -174,14 +174,14 @@ def _quality_mode(quality: str | None) -> str | None:
 
 # Guitarists count a pulse in roughly this range. Beat This! (and most trackers)
 # often lock onto 2× or ½× the felt beat; fold when the raw BPM is outside.
-_GUITAR_BPM_LO = 70.0
+_GUITAR_BPM_LO = 65.0  # was 70: 68 BPM ballads are real (eval/tempo_bench.py --fit)
 _GUITAR_BPM_HI = 168.0
 
 
 def fold_tempo_octave(beats: dict, duration: float | None = None) -> dict:
     """Rewrite a half- or double-time beat grid into a guitar-typical BPM.
 
-    Not a per-song override: any tracker BPM below ~70 is doubled (midpoints
+    Not a per-song override: any tracker BPM below ~65 is doubled (midpoints
     inserted); any BPM above ~168 is halved (every other beat kept, preferring
     the parity that still hits the reported downbeats).
     """

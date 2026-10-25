@@ -129,6 +129,22 @@ kaydedilmiş ritim gitarlarında aynı akorlar ortada birleşip not kaybettiriyo
 şarkılar tek kalır (kütüphanedeki üç şarkıda yanlış ayırma yok). Ölçüm akustik kayıtlarla
 yapıldı; gerçek rock miksleri, chorus/geniş delay gibi stereo efektleri henüz test edilmedi.
 
+## Elle düzeltme, akort, birlikte çal (p2.6)
+
+- **Tab'ı düzelt:** Tab ekranında **Düzelt** anahtarını aç. Bir notaya dokun: perdeyi değiştir,
+  aynı sesi başka tele taşı, teknik ekle/kaldır (h, p, sl, b½, b1, v, pm) ya da sil. Boş bir yere
+  çift tıkla: yeni nota. Klavye: ↑/↓ perde, Shift+↑/↓ tel, Sil tuşu. Akorlar ekranında da
+  **Düzelt** ile bir vuruşun ya da bütün ölçünün akorunu seçersin. Düzeltmeler kendiliğinden
+  kaydedilir, `data/tracks/<şarkı>/edits.json`'da durur, yeniden analizde silinmez; Tab gitar sesi
+  ve dışa aktarma (MusicXML/alphaTex) düzeltilmiş tab'ı kullanır. "Otomatik tab'a dön" geri alır.
+- **Akort:** Otomatik / Tel seç / Kromatik. Gerçek gitar notalarında (IDMT, 312 nota) doğru notayı
+  hep buluyor; 7 cent'lik bir farkı 0,01 cent hatayla ölçüyor (eski sürüm 4 cent kaçırıyordu).
+- **Birlikte çal:** şarkı çalarken mikrofondan dinler, her vuruşu yeşil/kırmızı yapar, doğruluk,
+  seri ve en çok zorlandığın ölçüler (tek dokunuşla %70 hızda döngü). Gerçek kayıtlarla ölçüldü:
+  pop/rock akorlarında doğru vuruşların %74–88'ini yakalıyor, yanlış akoru %3–5 kabul ediyor;
+  caz/bossa akorlarında daha zayıf (%30–40). **Kulaklık tak**: yoksa şarkının sesi de mikrofona
+  girer ve puan olduğundan yüksek çıkar. Gecikme ayarı bu ekranda.
+
 ## Kendi şarkılarınla ölçüm
 
 TabGen'in senin şarkılarında ne kadar doğru olduğunu görmek için, güvendiğin bir tab'ı (Guitar Pro

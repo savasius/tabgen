@@ -53,12 +53,23 @@ def part_musicxml_path(audio_hash: str, part_id: str) -> Path:
     return config.track_dir(audio_hash) / f"tab@{config.PIPELINE_VERSION}.{part_id}.musicxml"
 
 
-def choose_beat_grid(bt: dict, aio: dict) -> tuple[dict, str]:
+# A half-time grid holding more played notes per beat than this is too slow to read (fast jazz /
+# bossa comping at 150-200 BPM came out at half speed). Fitted with eval/tempo_bench.py --fit.
+HALF_TIME_MAX_NOTES_PER_BEAT = 4.0
+
+
+def choose_beat_grid(bt: dict, aio: dict, n_notes: int | None = None,
+                     duration: float | None = None) -> tuple[dict, str]:
     """Beat This! is primary. Both trackers sometimes lock onto eighth notes; when Beat This! is
     fast (>130 BPM) and All-In-One reports exactly half, use All-In-One's grid (the felt tempo
-    guitarists count, e.g. I'm Yours: 76 not 152)."""
+    guitarists count, e.g. I'm Yours: 76 not 152) — unless the guitar plays so many notes that the
+    half-time bars would be crammed, which means the fast grid was the real beat."""
     bpm_bt, bpm_aio = bt["bpm"], float(aio.get("bpm") or 0)
     if bpm_bt > 130 and bpm_aio and abs(bpm_bt / bpm_aio - 2) < 0.12 and len(aio.get("downbeats", [])) > 4:
+        if n_notes and duration:
+            per_beat = n_notes / max(1.0, duration * bpm_aio / 60.0)
+            if per_beat > HALF_TIME_MAX_NOTES_PER_BEAT:
+                return bt, "beat_this"
         return {"beats": aio["beats"], "downbeats": aio["downbeats"], "bpm": round(bpm_aio, 1)}, "allin1"
     return bt, "beat_this"
 
@@ -147,14 +158,6 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         lambda: key_stage.estimate_tuning(guitar_path),
     )
 
-    beats, beat_source = choose_beat_grid(beats, struct)
-    beats = post.fold_tempo_octave(beats, duration)
-    intervals = post._beat_intervals(beats["beats"], duration)
-    beat_labels = post.collapse_power_qualities(post.chord_per_beat(raw_chords, intervals))
-    grid, bars, ts, merged = post.rebuild_after_labels(
-        beats, beat_labels, intervals, struct.get("segments") or [], duration)
-    key = post.reconcile_relative_key(key, merged)
-
     progress("transcribe", 80)
     raw_notes = timed(
         "transcribe",
@@ -164,6 +167,15 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         required=False,
         default={"notes": [], "model": None, "tabcnn": {"available": False}, "n_notes": 0},
     )
+    n_notes = len(raw_notes.get("notes") or []) if raw_notes.get("model") else None
+    beats, beat_source = choose_beat_grid(beats, struct, n_notes, duration)
+    beats = post.fold_tempo_octave(beats, duration)
+    intervals = post._beat_intervals(beats["beats"], duration)
+    beat_labels = post.collapse_power_qualities(post.chord_per_beat(raw_chords, intervals))
+    grid, bars, ts, merged = post.rebuild_after_labels(
+        beats, beat_labels, intervals, struct.get("segments") or [], duration)
+    key = post.reconcile_relative_key(key, merged)
+
     beat_labels = post.collapse_missing_thirds(beat_labels, intervals, raw_notes.get("notes") or [])
     grid, bars, ts, merged = post.rebuild_after_labels(
         beats, beat_labels, intervals, struct.get("segments") or [], duration)
@@ -285,5 +297,9 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "created_at": time.time(),
     }
     write_json_atomic(out_path, analysis)
+    # what the library list shows, without parsing the full analysis for every song
+    write_json_atomic(config.track_dir(audio_hash) / "summary.json",
+                      {"version": config.PIPELINE_VERSION, "guitars": max(1, len(parts_out)),
+                       "bpm": beats["bpm"], "key": f"{key.get('tonic')} {key.get('mode')}"})
     progress("done", 100)
     return analysis

@@ -73,3 +73,20 @@ def test_snap_sections_drops_silence_and_snaps():
     out = post.snap_sections(segs, [0.6, 10.0, 20.0, 30.0], 31.0)
     assert [s["label"] for s in out] == ["intro", "verse"]
     assert out[0]["start"] == 0.6 and out[1]["start"] == 10.0
+
+
+def test_68_bpm_ballad_is_not_doubled():
+    from tabgen_analysis.stages.post import fold_tempo_octave
+    beats = [i * 60 / 68 for i in range(40)]
+    out = fold_tempo_octave({"bpm": 68.0, "beats": beats, "downbeats": beats[::4]}, 40.0)
+    assert out["bpm"] == 68.0 and "tempo_folded" not in out
+
+
+def test_dense_guitar_keeps_the_fast_grid():
+    from tabgen_analysis.pipeline import choose_beat_grid
+    bt = {"bpm": 166.0, "beats": [i * 60 / 166 for i in range(200)], "downbeats": []}
+    aio = {"bpm": 83.0, "beats": [i * 60 / 83 for i in range(100)], "downbeats": [i * 4 * 60 / 83 for i in range(25)]}
+    # 7 notes per half-time beat: the fast grid was the real beat (fast bossa comping)
+    assert choose_beat_grid(bt, aio, n_notes=500, duration=72.0)[1] == "beat_this"
+    # 2 notes per half-time beat: felt half time, as in I'm Yours (76 not 152)
+    assert choose_beat_grid(bt, aio, n_notes=200, duration=72.0)[1] == "allin1"
