@@ -80,6 +80,9 @@ export interface StaffNote {
   bendQt?: number
   bendRelease?: boolean
   midi: number
+  /** index into tab.notes (what an edit changes) */
+  index: number
+  edited: boolean
 }
 
 function bendQuarterTones(note: TabNote): number | undefined {
@@ -126,6 +129,8 @@ export function staffNotes(a: Analysis, notes: TabNote[]): StaffNote[] {
       bendQt: bendQuarterTones(n),
       bendRelease: !!(n.techniques ?? []).find((t) => t.type === 'bend' && t.release),
       midi: n.midi,
+      index: i,
+      edited: !!n.edited,
     }
   })
   for (let i = 0; i < mapped.length; i++) {

@@ -12,9 +12,12 @@ interface Props {
   loop: { start: number; end: number } | null
   autoScroll: boolean
   onSeek: (t: number) => void
+  /** fixing chords: a tap selects the beat (it still seeks) */
+  selectedBeat?: number | null
+  onPick?: (beat: number) => void
 }
 
-function ChordGridImpl({ analysis, names, changes, sectionNames, curBeat, loop, autoScroll, onSeek }: Props) {
+function ChordGridImpl({ analysis, names, changes, sectionNames, curBeat, loop, autoScroll, onSeek, selectedBeat, onPick }: Props) {
   const activeRef = useRef<HTMLDivElement>(null)
   const curBar = curBeat >= 0 ? analysis.grid[curBeat]?.bar ?? -1 : -1
 
@@ -70,15 +73,20 @@ function ChordGridImpl({ analysis, names, changes, sectionNames, curBeat, loop, 
                           <button
                             type="button"
                             key={i}
-                            onClick={() => onSeek(analysis.grid[i]?.t ?? bar.start)}
+                            onClick={() => { onPick?.(i); onSeek(analysis.grid[i]?.t ?? bar.start) }}
+                            data-testid={onPick ? `chord-beat-${i}` : undefined}
                             className={cn(
                               'relative flex h-11 items-center justify-center font-semibold tabular sm:h-12',
                               changes[i] ? 'text-sm' : 'text-[11px] text-muted-foreground',
                               active && 'bg-primary text-primary-foreground',
                               !active && past && 'text-muted-foreground',
+                              selectedBeat === i && 'ring-2 ring-inset ring-primary',
                             )}
                           >
                             {changes[i] ? names[i] : '·'}
+                            {analysis.grid[i]?.edited && (
+                              <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" data-testid="chord-edited" />
+                            )}
                           </button>
                         )
                       })}

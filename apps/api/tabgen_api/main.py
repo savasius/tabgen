@@ -6,11 +6,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from tabgen_analysis import PIPELINE_VERSION, config, pipeline
+from tabgen_analysis import PIPELINE_VERSION, config, edits, pipeline
 from tabgen_analysis.stages import guitar_parts
 from tabgen_analysis.stages.separate import resolve_playback, stems_dir
 
@@ -93,10 +93,27 @@ def _analysis_file(analysis_id: str) -> Path:
     return p
 
 
-@app.get("/v1/analyses/{analysis_id}")
-def get_analysis(analysis_id: str):
+def _load_analysis(analysis_id: str) -> dict:
+    """The stored analysis with the user's hand corrections (edits.json) applied."""
     data = json.loads(_analysis_file(analysis_id).read_text())
     data["meta"] = {**data.get("meta", {}), **(library.get(analysis_id) or {})}
+    return edits.apply(data)
+
+
+def _tab_of(data: dict, part: str) -> dict:
+    if part == "all":
+        if not data.get("tab"):
+            raise HTTPException(404, "No tab yet — reanalyze this song")
+        return data["tab"]
+    for p in data.get("parts") or []:
+        if p["id"] == part:
+            return p["tab"]
+    raise HTTPException(404, f"No guitar part {part!r}")
+
+
+@app.get("/v1/analyses/{analysis_id}")
+def get_analysis(analysis_id: str):
+    data = _load_analysis(analysis_id)
     data.pop("raw_chords", None)
     data["stale"] = data.get("version") != PIPELINE_VERSION
     if data.get("tab"):
@@ -118,26 +135,74 @@ def reanalyze(analysis_id: str):
 
 
 @app.get("/v1/analyses/{analysis_id}/export/musicxml")
-def export_musicxml(analysis_id: str):
-    _analysis_file(analysis_id)
-    p = pipeline.tab_musicxml_path(analysis_id)
-    if not p.exists():
-        raise HTTPException(404, "No tab MusicXML yet — reanalyze this song")
-    return FileResponse(p, media_type="application/vnd.recordare.musicxml+xml",
-                        filename=f"{analysis_id}.musicxml")
+def export_musicxml(analysis_id: str, part: str = Query("all")):
+    data = _load_analysis(analysis_id)
+    tab = _tab_of(data, part)
+    p = pipeline.tab_musicxml_path(analysis_id) if part == "all" else pipeline.part_musicxml_path(analysis_id, part)
+    name = f"{analysis_id}{'' if part == 'all' else '-' + part}.musicxml"
+    media = "application/vnd.recordare.musicxml+xml"
+    if tab.get("edited") or not p.exists():
+        return Response(edits.musicxml(data, tab), media_type=media,
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return FileResponse(p, media_type=media, filename=name)
 
 
 @app.get("/v1/analyses/{analysis_id}/export/alphatex")
-def export_alphatex(analysis_id: str):
+def export_alphatex(analysis_id: str, part: str = Query("all")):
+    tex = _tab_of(_load_analysis(analysis_id), part).get("alpha_tex")
+    if not tex:
+        raise HTTPException(404, "No tab yet — reanalyze this song")
+    name = f"{analysis_id}{'' if part == 'all' else '-' + part}.alphatex"
+    return Response(tex, media_type="text/plain", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+class TabEdit(BaseModel):
+    part: str = "all"
+    notes: list[dict]
+
+
+class ChordEdit(BaseModel):
+    part: str = "all"
+    beats: dict[str, str]
+
+
+@app.put("/v1/analyses/{analysis_id}/edits/tab")
+def put_tab_edit(analysis_id: str, body: TabEdit):
+    """Replace one guitar's notes with the user's corrected version; returns the analysis."""
+    data = _load_analysis(analysis_id)
+    tab = _tab_of(data, body.part)
+    try:
+        notes = edits.clean_notes(body.notes, tab.get("tuning") or [], int(tab.get("capo") or 0), data["duration"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise HTTPException(400, f"Bad note: {e}") from e
+    edits.set_tab(analysis_id, body.part, notes)
+    return get_analysis(analysis_id)
+
+
+@app.delete("/v1/analyses/{analysis_id}/edits/tab")
+def revert_tab_edit(analysis_id: str, part: str = Query("all")):
     _analysis_file(analysis_id)
-    p = pipeline.tab_alphatex_path(analysis_id)
-    if not p.exists():
-        data = json.loads(_analysis_file(analysis_id).read_text())
-        tex = (data.get("tab") or {}).get("alpha_tex")
-        if not tex:
-            raise HTTPException(404, "No tab yet — reanalyze this song")
-        return tex
-    return FileResponse(p, media_type="text/plain", filename=f"{analysis_id}.alphatex")
+    edits.set_tab(analysis_id, part, None)
+    return get_analysis(analysis_id)
+
+
+@app.put("/v1/analyses/{analysis_id}/edits/chords")
+def put_chord_edit(analysis_id: str, body: ChordEdit):
+    """Set chord labels on beats (merged into earlier corrections); returns the analysis."""
+    _analysis_file(analysis_id)
+    prev = (edits.load(analysis_id).get("chords") or {}).get(body.part, {})
+    try:
+        edits.set_chords(analysis_id, body.part, {**prev, **body.beats})
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return get_analysis(analysis_id)
+
+
+@app.delete("/v1/analyses/{analysis_id}/edits/chords")
+def revert_chord_edit(analysis_id: str, part: str = Query("all")):
+    _analysis_file(analysis_id)
+    edits.set_chords(analysis_id, part, None)
+    return get_analysis(analysis_id)
 
 
 @app.patch("/v1/analyses/{analysis_id}")

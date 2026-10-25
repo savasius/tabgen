@@ -15,7 +15,7 @@ const base = {
 
 describe('withPart', () => {
   it('keeps the song for all guitars', () => {
-    expect(withPart(base, null)).toBe(base)
+    expect(withPart(base, null)).toEqual({ ...base, viewPart: 'all' })
   })
   it('swaps tab, chords and guitar audio for one part, keeping the song grid when the part has none', () => {
     const v = withPart(base, 's2')

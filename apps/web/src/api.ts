@@ -1,5 +1,5 @@
 export interface Section { label: string; start: number; end: number }
-export interface GridBeat { t: number; end: number; bar: number; pos: number; chord: string }
+export interface GridBeat { t: number; end: number; bar: number; pos: number; chord: string; edited?: boolean }
 export interface Bar { index: number; start: number; end: number; beats: number[]; section: number | null; pickup: boolean }
 export interface ChordSeg { start: number; end: number; label: string; beats: number }
 
@@ -24,6 +24,10 @@ export interface TabNote {
   low_confidence?: boolean
   techniques: Technique[]
   source?: string
+  /** heard onset before snapping to the 16th grid */
+  t0?: number
+  /** changed by hand */
+  edited?: boolean
 }
 
 export interface TabData {
@@ -36,6 +40,8 @@ export interface TabData {
   models: Record<string, unknown>
   stats: { n_notes: number; n_low_confidence: number; fallback?: string | null; guitar_source?: string }
   error?: string | null
+  /** notes were corrected by hand (edits.json) */
+  edited?: boolean
 }
 
 export type AudioStem = 'mix' | 'guitar' | 'original'
@@ -98,6 +104,10 @@ export interface Analysis {
   tab?: TabData | null
   /** empty when the stem holds a single guitar */
   parts?: GuitarPart[]
+  /** which guitar this view shows ('all' or a part id); set client-side by withPart */
+  viewPart?: string
+  /** hand corrections present (server applies them before sending) */
+  edits?: { tabs: string[]; chords: string[]; updated_at?: number }
   guitar?: GuitarInfo
   audio?: { mix: string; original: string; guitar: string }
   warnings?: { code: string; message: string }[]
@@ -157,6 +167,19 @@ export const api = {
     `${BASE}/v1/analyses/${id}/audio?stem=guitar`,
     `${BASE}/v1/analyses/${id}/stems/guitar`,
   ],
-  musicxmlUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/musicxml`,
-  alphatexUrl: (id: string) => `${BASE}/v1/analyses/${id}/export/alphatex`,
+  musicxmlUrl: (id: string, part = 'all') => `${BASE}/v1/analyses/${id}/export/musicxml?part=${part}`,
+  alphatexUrl: (id: string, part = 'all') => `${BASE}/v1/analyses/${id}/export/alphatex?part=${part}`,
+  /** Save one guitar's corrected notes; returns the analysis with all corrections applied. */
+  saveTab: (id: string, part: string, notes: TabNote[]) =>
+    fetch(`${BASE}/v1/analyses/${id}/edits/tab`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ part, notes }),
+    }).then(json<Analysis>),
+  revertTab: (id: string, part: string) =>
+    fetch(`${BASE}/v1/analyses/${id}/edits/tab?part=${part}`, { method: 'DELETE' }).then(json<Analysis>),
+  saveChords: (id: string, part: string, beats: Record<number, string>) =>
+    fetch(`${BASE}/v1/analyses/${id}/edits/chords`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ part, beats }),
+    }).then(json<Analysis>),
+  revertChords: (id: string, part: string) =>
+    fetch(`${BASE}/v1/analyses/${id}/edits/chords?part=${part}`, { method: 'DELETE' }).then(json<Analysis>),
 }

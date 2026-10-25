@@ -11,6 +11,8 @@ import { SectionStrip } from '@/components/app/SectionStrip'
 import { Waveform } from '@/components/app/Waveform'
 import { NowNext } from '@/components/app/NowNext'
 import { ChordGrid } from '@/components/app/ChordGrid'
+import { ChordPicker } from '@/components/app/ChordPicker'
+import { shiftChordLabel } from '@/lib/tab-edit'
 import { Transport } from '@/components/app/Transport'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/dropdown'
 import { useApp, type TKey } from '@/lib/store'
@@ -151,10 +153,10 @@ function SongChrome({ parts, partId, setPartId }: {
             </Button>
           </MenuTrigger>
           <MenuContent>
-            <MenuItem onSelect={() => { window.location.href = api.musicxmlUrl(a.id) }}>
+            <MenuItem onSelect={() => { window.location.href = api.musicxmlUrl(a.id, a.viewPart) }}>
               {t('song.exportItems.musicxml')}
             </MenuItem>
-            <MenuItem onSelect={() => { window.location.href = api.alphatexUrl(a.id) }}>
+            <MenuItem onSelect={() => { window.location.href = api.alphatexUrl(a.id, a.viewPart) }}>
               {t('tab.exportAlphatex')}
             </MenuItem>
           </MenuContent>
@@ -271,6 +273,28 @@ export function ChordsView() {
   }), [a, beatChords])
   const secNames = useMemo(() => sectionNames(a.sections, t, true), [a.sections, t])
   const unique = uniqueLabels(a.chords.map((c) => c.label))
+
+  const [fixing, setFixing] = useState(false)
+  const [selBeat, setSelBeat] = useState<number | null>(null)
+  const [scope, setScope] = useState<'beat' | 'bar'>('bar')
+  const [chordErr, setChordErr] = useState(false)
+  const part = a.viewPart ?? 'all'
+  // Stored labels are concert pitch; the grid shows them through transpose and capo.
+  const shown = s.transpose - (s.capo ?? 0)
+  const pickChord = (label: string) => {
+    if (selBeat == null) return
+    const g = a.grid[selBeat]
+    const beats = scope === 'bar' ? (a.bars[g.bar]?.beats ?? [selBeat]) : [selBeat]
+    const stored = shiftChordLabel(label, -shown)
+    setChordErr(false)
+    api.saveChords(a.id, part, Object.fromEntries(beats.map((i) => [i, stored])))
+      .then(s.setAnalysis).catch(() => setChordErr(true))
+  }
+  const revertChords = () => {
+    if (!window.confirm(t('song.chordEdit.revertConfirm'))) return
+    api.revertChords(a.id, part).then((res) => { s.setAnalysis(res); setSelBeat(null) }).catch(() => setChordErr(true))
+  }
+  const chordsEdited = a.grid.some((g) => g.edited)
 
   const snapToBar = (tt: number) => a.bars.findLast((bar) => bar.start <= tt + 0.05) ?? a.bars[0]
   const setLoopPoint = () => {
@@ -428,7 +452,23 @@ export function ChordsView() {
           </span>
         ))}
       </div>
-      <p className="order-4 -mt-2 text-[11px] text-muted-foreground">{t('song.uncertainHint')}</p>
+      <div className="order-4 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-[11px] text-muted-foreground">{t('song.uncertainHint')}</p>
+        <label className="ml-auto flex items-center gap-2 text-sm" data-testid="chord-fix-toggle">
+          <Switch checked={fixing} onCheckedChange={(v) => { setFixing(v); if (!v) setSelBeat(null) }} />
+          {t('tab.edit.toggle')}
+        </label>
+      </div>
+      {(fixing || chordsEdited) && (
+        <div className="order-4 flex flex-wrap items-center gap-2 text-sm">
+          {fixing && selBeat == null && <span className="text-muted-foreground">{t('song.chordEdit.hint')}</span>}
+          {chordErr && <span className="text-destructive">{t('tab.edit.error')}</span>}
+          {chordsEdited && <span className="text-muted-foreground">{t('song.chordEdit.edited')}</span>}
+          {chordsEdited && (
+            <Button size="sm" variant="ghost" onClick={revertChords} data-testid="chord-revert">{t('tab.edit.revert')}</Button>
+          )}
+        </div>
+      )}
 
       <div className="order-4">
         <ChordGrid
@@ -438,10 +478,24 @@ export function ChordsView() {
           sectionNames={sectionNames(a.sections, t)}
           curBeat={s.curBeat}
           loop={s.loop}
-          autoScroll={s.autoScroll && s.playing}
+          autoScroll={s.autoScroll && s.playing && !fixing}
           onSeek={s.seek}
+          selectedBeat={fixing ? selBeat : null}
+          onPick={fixing ? setSelBeat : undefined}
         />
       </div>
+      {fixing && selBeat != null && a.grid[selBeat] && (
+        <div className="sticky bottom-3 z-30 order-5 max-md:bottom-44">
+          <ChordPicker
+            label={shiftChordLabel(a.grid[selBeat].chord, shown)}
+            flats={spelling === 'flats'}
+            scope={scope}
+            onScope={setScope}
+            onPick={pickChord}
+            onClose={() => setSelBeat(null)}
+          />
+        </div>
+      )}
       <p className="order-4 text-[11px] text-muted-foreground">
         {t('song.accuracy')} · {t('song.shortcuts')}
         {a.models.chords ? ` · ${a.models.chords}` : ''}

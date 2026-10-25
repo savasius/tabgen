@@ -31,6 +31,7 @@ function Staff({
   emptyHint,
   autoScroll,
   analysis,
+  onAdd,
 }: {
   bars: number[]
   notes: StaffNote[]
@@ -38,12 +39,14 @@ function Staff({
   currentPos: number
   selectedId?: string
   nowIds: Set<string>
-  onSelect: (n: StaffNote) => void
+  onSelect: (n: StaffNote, el?: Element) => void
   zoom: number
   steps: number
   emptyHint?: string
   autoScroll: boolean
   analysis: Analysis
+  /** double-click on an empty spot: bar, 16th position in the bar, display string (1 = high e) */
+  onAdd?: (bar: number, pos: number, string: number) => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const barW = 300 * zoom
@@ -140,6 +143,27 @@ function Staff({
               </g>
             )
           })}
+          {onAdd && (
+            <rect
+              data-testid="tab-add-area"
+              x={gutter}
+              y={top - 14}
+              width={width - gutter - 6}
+              height={5 * gap + 28}
+              fill="transparent"
+              onDoubleClick={(e) => {
+                const box = (e.currentTarget.ownerSVGElement ?? e.currentTarget).getBoundingClientRect()
+                const x = e.clientX - box.left
+                const y = e.clientY - box.top
+                const i = Math.floor((x - gutter - 8) / barW)
+                if (i < 0 || i >= bars.length) return
+                const within = x - (gutter + 8 + i * barW + 18)
+                const pos = Math.max(0, Math.min(steps - 1, Math.round((within / (barW - 36)) * steps)))
+                const string = Math.max(1, Math.min(6, Math.round((y - top) / gap) + 1))
+                onAdd(bars[i], pos, string)
+              }}
+            />
+          )}
           {inStaff.map((n) => {
             const x = xAt(n.bar, n.pos)
             const y = stringY(n.string)
@@ -257,7 +281,7 @@ function Staff({
             const pm = n.glyphs.includes('pm')
             const boxW = n.fret >= 10 ? 32 : 28
             return (
-              <g key={n.id} className="cursor-pointer" onClick={() => onSelect(n)}>
+              <g key={n.id} className="cursor-pointer" onClick={(e) => onSelect(n, e.currentTarget)}>
                 <rect
                   x={x - boxW / 2}
                   y={y - 12}
@@ -280,6 +304,9 @@ function Staff({
                 >
                   {n.fret}
                 </text>
+                {n.edited && (
+                  <circle data-testid="note-edited" cx={x + boxW / 2 - 2} cy={y - 10} r={3.5} fill="var(--primary)" stroke="var(--card)" strokeWidth={1.5} />
+                )}
                 {pm && (
                   <text x={x} y={y + 22} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="var(--font-mono)" fontWeight="700">
                     pm
@@ -325,6 +352,7 @@ export function TabStaff({
   zoom = 1,
   emptyHint,
   autoScroll,
+  onAdd,
 }: {
   analysis: Analysis
   notes: StaffNote[]
@@ -332,10 +360,12 @@ export function TabStaff({
   currentPos: number
   selectedId?: string
   nowIds: Set<string>
-  onSelect: (n: StaffNote) => void
+  onSelect: (n: StaffNote, el?: Element) => void
   zoom?: number
   emptyHint?: string
   autoScroll: boolean
+  /** editing: double-click an empty spot to add a note (empty rows stay drawn) */
+  onAdd?: (bar: number, pos: number, string: number) => void
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [perRow, setPerRow] = useState(4)
@@ -376,9 +406,10 @@ export function TabStaff({
           onSelect={onSelect}
           zoom={zoom}
           steps={steps}
-          emptyHint={emptyHint}
+          emptyHint={onAdd ? undefined : emptyHint}
           autoScroll={autoScroll}
           analysis={analysis}
+          onAdd={onAdd}
         />
       ))}
     </div>

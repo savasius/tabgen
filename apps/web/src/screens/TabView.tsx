@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '@/api'
+import { api, type TabNote, type Technique } from '@/api'
 import { TabStaff } from '@/components/app/TabStaff'
+import { NoteEditor } from '@/components/app/NoteEditor'
 import { Fretboard, MeasureTable } from '@/components/app/Fretboard'
 import { Transport } from '@/components/app/Transport'
 import { SectionStrip } from '@/components/app/SectionStrip'
@@ -10,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { useApp, type TKey } from '@/lib/store'
 import { sectionNames } from '@/lib/display'
 import { beatsPerBar, locatePlayhead, notesAt, staffNotes, timeToTick, type StaffNote } from '@/lib/time'
+import { addNote, deleteNote, moveString, setFret, toggleTechnique } from '@/lib/tab-edit'
 import { useSong } from './song-session'
 
 const LEGEND_GLYPH: Record<string, string> = {
@@ -21,7 +23,14 @@ export function TabView() {
   const s = useSong()
   const a = s.analysis
   const tab = a.tab
-  const [sel, setSel] = useState<StaffNote | null>(null)
+  const part = a.viewPart ?? 'all'
+  const [selIdx, setSelIdx] = useState<number | null>(null)
+  const [editing, setEditing] = useState(false)
+  // Local copy while a fix is on its way to the server (instant feedback, no flicker).
+  const [draft, setDraft] = useState<TabNote[] | null>(null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const seq = useRef(0)
+  const timer = useRef<number | undefined>(undefined)
   const [zoom, setZoom] = useState(1)
   const [view, setView] = useState<'tab' | 'both' | 'fretboard'>('tab')
   const [advanced, setAdvanced] = useState(false)
@@ -29,8 +38,77 @@ export function TabView() {
   const apiRef = useRef<{ destroy(): void; tickPosition: number } | null>(null)
   const [tabErr, setTabErr] = useState<string | null>(null)
 
-  const notes = tab?.notes
+  useEffect(() => { setDraft(null); setSelIdx(null); setSaveState('idle') }, [a.id, part])
+  const notes = draft ?? tab?.notes
   const mapped = useMemo(() => staffNotes(a, notes ?? []), [a, notes])
+  const sel: StaffNote | null = selIdx == null ? null : mapped.find((m) => m.index === selIdx) ?? null
+  const tuning = tab?.tuning ?? []
+  const capo = tab?.capo ?? 0
+
+  const commit = (raw: TabNote[], select: number | null = selIdx) => {
+    // the server stores notes by (start, string); keep the same order so the selection holds
+    const picked = select == null ? null : raw[select]
+    const next = [...raw].sort((x, y) => x.start - y.start || x.string - y.string)
+    setDraft(next)
+    setSelIdx(picked ? next.indexOf(picked) : null)
+    const my = ++seq.current
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      setSaveState('saving')
+      api.saveTab(a.id, part, next).then((res) => {
+        if (my !== seq.current) return // a newer fix is already on its way
+        s.setAnalysis(res)
+        setDraft(null)
+        setSaveState('saved')
+      }).catch(() => { if (my === seq.current) setSaveState('error') })
+    }, 450)
+  }
+  const edit = {
+    fret: (f: number) => { if (notes && selIdx != null) commit(setFret(notes, selIdx, f, tuning, capo)) },
+    string: (dir: -1 | 1) => {
+      if (!notes || selIdx == null) return
+      const next = moveString(notes, selIdx, dir, tuning, capo)
+      if (next) commit(next)
+    },
+    toggle: (type: Technique['type'], extra?: Partial<Technique>) => {
+      if (notes && selIdx != null) commit(toggleTechnique(notes, selIdx, type, extra))
+    },
+    remove: () => { if (notes && selIdx != null) commit(deleteNote(notes, selIdx), null) },
+    add: (bar: number, pos: number, string: number) => {
+      const r = notes && addNote(a, notes, bar, pos, string, 0, tuning, capo)
+      if (r) commit(r.notes, r.index)
+    },
+  }
+  const canMove = (dir: -1 | 1) => !!(notes && selIdx != null && moveString(notes, selIdx, dir, tuning, capo))
+  const revert = () => {
+    if (!window.confirm(t('tab.edit.revertConfirm'))) return
+    window.clearTimeout(timer.current)
+    seq.current++
+    api.revertTab(a.id, part).then((res) => { s.setAnalysis(res); setDraft(null); setSelIdx(null); setSaveState('idle') })
+      .catch(() => setSaveState('error'))
+  }
+
+  useEffect(() => {
+    if (!editing || selIdx == null) return
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      const n = notes?.[selIdx]
+      if (!n) return
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (e.shiftKey) edit.string(e.key === 'ArrowUp' ? -1 : 1)
+        else edit.fret(n.fret + (e.key === 'ArrowUp' ? 1 : -1))
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        edit.remove()
+      } else if (e.key === 'Escape') {
+        setSelIdx(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const head = locatePlayhead(a, s.time)
   const sounding = notesAt(notes ?? [], s.time)
   const uncertain = mapped.filter((n) => n.low).sort((x, y) => x.start - y.start)
@@ -135,6 +213,10 @@ export function TabView() {
             <Switch checked={advanced} onCheckedChange={setAdvanced} />
             {t('tab.advanced')}
           </label>
+          <label className="flex items-center gap-2 text-sm" data-testid="edit-toggle">
+            <Switch checked={editing} onCheckedChange={(v) => { setEditing(v); if (!v) setSelIdx(null) }} />
+            {t('tab.edit.toggle')}
+          </label>
         </div>
         <p className="font-mono text-xs font-semibold tracking-wide text-primary" data-testid="tab-glyph-key">
           {t('tab.glyphs')}
@@ -149,11 +231,29 @@ export function TabView() {
           currentPos={head.pos}
           selectedId={sel?.id}
           nowIds={nowIds}
-          onSelect={(n) => { setSel(n); s.seek(n.start) }}
+          onSelect={(n, el) => {
+            setSelIdx(n.index)
+            s.seek(n.start)
+            // keep the note clear of the editor docked at the bottom
+            if (editing) el?.closest('[data-testid=tab-staff]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          }}
           zoom={zoom}
           emptyHint={t('tab.sectionChords')}
-          autoScroll={s.autoScroll}
+          autoScroll={s.autoScroll && !editing}
+          onAdd={editing ? edit.add : undefined}
         />
+      )}
+
+      {(tab.edited || saveState !== 'idle') && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="edit-status">
+          {saveState === 'saving' && <span className="text-muted-foreground">{t('tab.edit.saving')}</span>}
+          {saveState === 'saved' && <span className="text-primary">✓ {t('tab.edit.saved')}</span>}
+          {saveState === 'error' && <span className="text-destructive">{t('tab.edit.error')}</span>}
+          {saveState === 'idle' && tab.edited && <span className="text-muted-foreground">{t('tab.edit.edited')}</span>}
+          {tab.edited && (
+            <Button size="sm" variant="ghost" onClick={revert} data-testid="edit-revert">{t('tab.edit.revert')}</Button>
+          )}
+        </div>
       )}
 
       <p className="text-sm text-muted-foreground">{t('tab.how')}</p>
@@ -190,8 +290,8 @@ export function TabView() {
         )}
         {advanced && (
           <>
-            <a className="ml-auto text-xs text-primary underline-offset-4 hover:underline" href={api.musicxmlUrl(a.id)}>{t('song.exportItems.musicxml')}</a>
-            <a className="text-xs text-primary underline-offset-4 hover:underline" href={api.alphatexUrl(a.id)}>{t('tab.exportAlphatex')}</a>
+            <a className="ml-auto text-xs text-primary underline-offset-4 hover:underline" href={api.musicxmlUrl(a.id, part)}>{t('song.exportItems.musicxml')}</a>
+            <a className="text-xs text-primary underline-offset-4 hover:underline" href={api.alphatexUrl(a.id, part)}>{t('tab.exportAlphatex')}</a>
           </>
         )}
       </div>
@@ -248,7 +348,27 @@ export function TabView() {
         </p>
       )}
 
-      <div className="sticky bottom-3 z-20">
+      <div className="sticky bottom-3 z-20 flex flex-col gap-2">
+        {editing && (
+          <div className="flex flex-col gap-2">
+            {sel && notes?.[sel.index] ? (
+              <NoteEditor
+                note={notes[sel.index]}
+                canHigher={canMove(-1)}
+                canLower={canMove(1)}
+                onFret={edit.fret}
+                onString={edit.string}
+                onToggle={edit.toggle}
+                onDelete={edit.remove}
+                onClose={() => setSelIdx(null)}
+              />
+            ) : (
+              <p className="rounded-xl border border-dashed border-border bg-card/80 px-3 py-2 text-sm text-muted-foreground backdrop-blur">
+                {t('tab.edit.hint')}
+              </p>
+            )}
+          </div>
+        )}
         <Transport
           time={s.time}
           duration={a.duration}

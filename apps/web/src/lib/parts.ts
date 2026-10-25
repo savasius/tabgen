@@ -3,9 +3,10 @@ import type { Analysis, GuitarPart } from '@/api'
 /** The song as seen through one guitar: its tab, its chords, its audio. null = all guitars. */
 export function withPart(a: Analysis, partId: string | null): Analysis {
   const p = partId ? a.parts?.find((x) => x.id === partId) : undefined
-  if (!p) return a
+  if (!p) return { ...a, viewPart: 'all' }
   return {
     ...a,
+    viewPart: p.id,
     tab: p.tab,
     chords: p.chords,
     grid: p.grid ?? a.grid,
