@@ -1,29 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type TKey } from '@/lib/store'
 import { TUNINGS, type TuningId } from '@/lib/tunings'
+import { centsBetween, detectPitch, nearestNote, PitchSmoother } from '@/lib/pitch'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { cn } from '@/lib/utils'
 
-const STRING_LABELS = ['E', 'A', 'D', 'G', 'B', 'e']
-
-function detectPitch(buf: Float32Array, sr: number): number | null {
-  let rms = 0
-  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i]
-  rms = Math.sqrt(rms / buf.length)
-  if (rms < 0.01) return null
-  const minLag = Math.floor(sr / 1100)
-  const maxLag = Math.floor(sr / 70)
-  let bestLag = 0
-  let bestCorr = 0
-  for (let lag = minLag; lag < maxLag; lag++) {
-    let corr = 0
-    for (let i = 0; i < buf.length - lag; i++) corr += buf[i] * buf[i + lag]
-    if (corr > bestCorr) { bestCorr = corr; bestLag = lag }
-  }
-  if (!bestLag || bestCorr < 0.01) return null
-  return sr / bestLag
-}
+type Mode = 'auto' | 'manual' | 'chromatic'
 
 function nearestString(hz: number, targets: readonly number[]) {
   let best = 0
@@ -35,67 +18,110 @@ function nearestString(hz: number, targets: readonly number[]) {
   return best
 }
 
+const IN_TUNE = 4      // cents
+const HOLD_MS = 350    // in tune for this long before it turns green
+
 export function Tuner() {
   const { t, settings, set } = useApp()
   const tuning = TUNINGS[settings.tuning]
-  const [auto, setAuto] = useState(true)
+  const [mode, setMode] = useState<Mode>('auto')
   const [string, setString] = useState(0)
-  const [cents, setCents] = useState(0)
-  const [hz, setHz] = useState<number | null>(null)
+  const [reading, setReading] = useState<{ hz: number; cents: number; label: string } | null>(null)
+  const [locked, setLocked] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const raf = useRef(0)
-  const stringRef = useRef(string)
-  stringRef.current = string
+  const [needsTap, setNeedsTap] = useState(false)
+  // the audio loop reads these, so changing a setting never restarts the microphone
+  const cfg = useRef({ mode, string, hz: tuning.hz as readonly number[], notes: tuning.notes as readonly string[], a4: settings.a4 })
+  cfg.current = { mode, string, hz: tuning.hz, notes: tuning.notes, a4: settings.a4 }
+  const start = useRef<() => void>(() => {})
 
   useEffect(() => {
     let stream: MediaStream | null = null
     let ctx: AudioContext | null = null
-    const start = async () => {
+    let raf = 0
+    let stopped = false
+    const smooth = new PitchSmoother(5)
+    let inSince = 0
+    let quiet = 0
+    const run = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } })
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        })
+        if (stopped) { stream.getTracks().forEach((tr) => tr.stop()); return }
         ctx = new AudioContext()
-        const src = ctx.createMediaStreamSource(stream)
+        if (ctx.state === 'suspended') setNeedsTap(true)
         const an = ctx.createAnalyser()
-        an.fftSize = 2048
-        src.connect(an)
+        an.fftSize = 4096
+        ctx.createMediaStreamSource(stream).connect(an)
         const data = new Float32Array(an.fftSize)
         const tick = () => {
           an.getFloatTimeDomainData(data)
-          const f = detectPitch(data, ctx!.sampleRate)
-          if (f) {
-            const idx = auto ? nearestString(f * (440 / settings.a4), tuning.hz) : stringRef.current
-            if (auto) setString(idx)
-            const target = tuning.hz[idx] * (settings.a4 / 440)
-            setHz(f)
-            setCents(1200 * Math.log2(f / target))
+          const p = detectPitch(data, ctx!.sampleRate)
+          const c = cfg.current
+          if (p && p.clarity > 0.75) {
+            quiet = 0
+            const hz = smooth.push(p.hz)
+            let cents: number
+            let label: string
+            if (c.mode === 'chromatic') {
+              const n = nearestNote(hz, c.a4)
+              cents = n.cents
+              label = n.name
+            } else {
+              const idx = c.mode === 'auto' ? nearestString(hz * (440 / c.a4), c.hz) : c.string
+              if (c.mode === 'auto' && idx !== c.string) setString(idx)
+              cents = centsBetween(hz, c.hz[idx] * (c.a4 / 440))
+              label = c.notes[idx].replace(/\d/, '')
+            }
+            setReading({ hz, cents, label })
+            const now = performance.now()
+            if (Math.abs(cents) < IN_TUNE) {
+              if (!inSince) inSince = now
+              setLocked(now - inSince > HOLD_MS)
+            } else {
+              inSince = 0
+              setLocked(false)
+            }
+          } else if (++quiet > 30) {
+            // ~0.5 s of nothing: the string stopped ringing
+            smooth.reset()
+            inSince = 0
+            setLocked(false)
+            setReading(null)
           }
-          raf.current = requestAnimationFrame(tick)
+          raf = requestAnimationFrame(tick)
         }
-        raf.current = requestAnimationFrame(tick)
+        raf = requestAnimationFrame(tick)
+        start.current = () => { void ctx?.resume().then(() => setNeedsTap(false)) }
       } catch {
         setErr(t('tuner.noMic'))
       }
     }
-    void start()
+    void run()
     return () => {
-      cancelAnimationFrame(raf.current)
+      stopped = true
+      cancelAnimationFrame(raf)
       stream?.getTracks().forEach((tr) => tr.stop())
       void ctx?.close()
     }
-  }, [auto, settings.a4, settings.tuning, t, tuning.hz])
+  }, [t])
 
-  const inTune = Math.abs(cents) < 5 && hz != null
+  const cents = reading?.cents ?? 0
   const angle = Math.max(-50, Math.min(50, cents * 1.6))
+  const label = reading?.label ?? (mode === 'chromatic' ? '–' : tuning.notes[string].replace(/\d/, ''))
 
   const playTone = () => {
     const ctx = new AudioContext()
     const osc = ctx.createOscillator()
     const g = ctx.createGain()
+    osc.type = 'triangle'
     osc.frequency.value = tuning.hz[string] * (settings.a4 / 440)
-    g.gain.value = 0.15
+    g.gain.setValueAtTime(0.2, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.6)
     osc.connect(g).connect(ctx.destination)
     osc.start()
-    osc.stop(ctx.currentTime + 1.2)
+    osc.stop(ctx.currentTime + 1.6)
     osc.onended = () => void ctx.close()
   }
 
@@ -104,19 +130,21 @@ export function Tuner() {
       <h1 className="text-3xl font-semibold">{t('tuner.title')}</h1>
       <p className="mt-1 text-muted-foreground">{t('tuner.subtitle')}</p>
 
-      <div className="mt-4 flex items-center justify-between">
-        <Segmented
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <Segmented<Mode>
           size="sm"
-          value={auto ? 'auto' : 'manual'}
-          onChange={(v) => setAuto(v === 'auto')}
+          value={mode}
+          onChange={setMode}
           options={[
             { value: 'auto', label: t('tuner.auto') },
             { value: 'manual', label: t('tuner.manual') },
+            { value: 'chromatic', label: t('tuner.chromatic') },
           ]}
         />
         <select
           className="h-9 rounded-lg border border-border bg-background px-2 text-sm"
           value={settings.tuning}
+          disabled={mode === 'chromatic'}
           onChange={(e) => set('tuning', e.target.value as TuningId)}
         >
           {(Object.keys(TUNINGS) as TuningId[]).map((id) => (
@@ -127,50 +155,64 @@ export function Tuner() {
         </select>
       </div>
 
-      <div className="relative mx-auto mt-8 h-52 w-full max-w-sm">
+      {needsTap && (
+        <Button className="mt-4 w-full" onClick={() => start.current()}>{t('tuner.startMic')}</Button>
+      )}
+
+      <div className="relative mx-auto mt-8 h-52 w-full max-w-sm" data-testid="tuner-gauge">
         <svg viewBox="0 0 200 110" className="w-full">
           <path d="M10 100 A90 90 0 0 1 190 100" className="fill-none stroke-border" strokeWidth="10" />
-          <path d="M10 100 A90 90 0 0 1 190 100" className="fill-none stroke-success" strokeWidth="10" strokeDasharray="40 400" strokeDashoffset="-80" />
+          <path d="M10 100 A90 90 0 0 1 190 100" className="fill-none stroke-success" strokeWidth="10" strokeDasharray="12 400" strokeDashoffset="-135.4" />
+          {[-50, -25, 0, 25, 50].map((c) => {
+            const a = (c * 1.6 * Math.PI) / 180
+            return (
+              <line key={c} x1={100 + 92 * Math.sin(a)} y1={100 - 92 * Math.cos(a)} x2={100 + 100 * Math.sin(a)} y2={100 - 100 * Math.cos(a)}
+                className="stroke-muted-foreground" strokeWidth={c === 0 ? 2 : 1} />
+            )
+          })}
           <line
             x1="100"
             y1="100"
             x2={100 + 80 * Math.sin((angle * Math.PI) / 180)}
             y2={100 - 80 * Math.cos((angle * Math.PI) / 180)}
-            className={inTune ? 'stroke-success' : 'stroke-primary'}
+            className={cn('transition-[x2,y2] duration-100', locked ? 'stroke-success' : reading ? 'stroke-primary' : 'stroke-muted-foreground')}
             strokeWidth="3"
             strokeLinecap="round"
           />
           <circle cx="100" cy="100" r="6" className="fill-foreground" />
         </svg>
         <div className="absolute inset-x-0 top-24 text-center">
-          <p className="text-5xl font-semibold">{STRING_LABELS[string]}</p>
-          <p className="font-mono text-sm tabular text-muted-foreground">
-            {cents > 0 ? '+' : ''}
-            {cents.toFixed(0)} ¢ · {(hz ?? tuning.hz[string]).toFixed(1)} Hz
+          <p className={cn('text-5xl font-semibold', locked && 'text-success')} data-testid="tuner-note">{label}</p>
+          <p className="font-mono text-sm tabular text-muted-foreground" data-testid="tuner-cents">
+            {reading ? `${cents > 0 ? '+' : ''}${cents.toFixed(0)} ¢ · ${reading.hz.toFixed(1)} Hz` : '— ¢'}
           </p>
         </div>
       </div>
 
-      <p className={cn('text-center text-sm font-medium', inTune ? 'text-success' : 'text-muted-foreground')}>
-        {hz == null ? t('tuner.listening') : inTune ? t('tuner.inTune') : cents < 0 ? t('tuner.tighten') : t('tuner.loosen')}
+      <p className={cn('text-center text-sm font-medium', locked ? 'text-success' : 'text-muted-foreground')} data-testid="tuner-hint">
+        {!reading ? t('tuner.hold') : locked ? t('tuner.inTune') : Math.abs(cents) < IN_TUNE ? t('tuner.listening') : cents < 0 ? t('tuner.tighten') : t('tuner.loosen')}
       </p>
 
-      <div className="mt-6 grid grid-cols-6 gap-2">
-        {STRING_LABELS.map((lab, i) => (
-          <button
-            key={lab + i}
-            type="button"
-            onClick={() => { setAuto(false); setString(i) }}
-            className={cn(
-              'rounded-xl border py-3 text-sm font-semibold',
-              string === i ? 'border-primary bg-primary/15' : 'border-border',
-            )}
-          >
-            {tuning.notes[i].replace(/\d/, '')}
-          </button>
-        ))}
-      </div>
-      <Button className="mt-6 w-full" variant="outline" onClick={playTone}>{t('tuner.playTone')}</Button>
+      {mode !== 'chromatic' && (
+        <div className="mt-6 grid grid-cols-6 gap-2">
+          {tuning.notes.map((note, i) => (
+            <button
+              key={note + i}
+              type="button"
+              onClick={() => { setMode('manual'); setString(i) }}
+              className={cn(
+                'rounded-xl border py-3 text-sm font-semibold',
+                string === i ? 'border-primary bg-primary/15' : 'border-border',
+              )}
+            >
+              {note.replace(/\d/, '')}
+            </button>
+          ))}
+        </div>
+      )}
+      {mode !== 'chromatic' && (
+        <Button className="mt-6 w-full" variant="outline" onClick={playTone}>{t('tuner.playTone')}</Button>
+      )}
       {err && <p className="mt-4 text-xs text-destructive">{err}</p>}
     </div>
   )
