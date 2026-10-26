@@ -165,6 +165,14 @@ yapıldı; gerçek rock miksleri, chorus/geniş delay gibi stereo efektleri hen�
   caz/bossa akorlarında daha zayıf (%30–40). **Kulaklık tak**: yoksa şarkının sesi de mikrofona
   girer ve puan olduğundan yüksek çıkar. Gecikme ayarı bu ekranda.
 
+## Alçak notalar (p2.7)
+
+Sadece gitar çalınan kayıtlarda (bas yokken) ayırma modeli gitarın kalın tellerdeki notalarını
+"bas" parçasına atıyordu; bu notalar tab'da kayboluyordu. Artık bas parçası gerçekten bas mı yoksa
+kaçmış gitar mı diye bakılıyor (gerçek bas 75 Hz altında ses verir) ve kaçmış gitar geri ekleniyor.
+12 gerçek elektro gitar solosunda (Guitar-TECHS) doğru duyulan nota oranı 0.60 → 0.66. Gruplu
+şarkılara dokunulmuyor. Eski şarkıları "Yeniden analiz et" ile güncelleyebilirsin.
+
 ## Kendi şarkılarınla ölçüm
 
 TabGen'in senin şarkılarında ne kadar doğru olduğunu görmek için, güvendiğin bir tab'ı (Guitar Pro

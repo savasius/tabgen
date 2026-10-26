@@ -226,6 +226,36 @@ Browser check with a synthetic player following the chords: 100% over 23 beats; 
 reanalysis, and drive Tab gitar playback and exports. Checked end to end in the browser: fret,
 string move (pitch kept), technique, add, delete, keyboard, revert, chord per beat/bar.
 
+## 9. p2.7: real electric solos (Guitar-TECHS) and the bass-stem leak
+
+**Test set.** Guitar-TECHS (CC BY 4.0) player 03 "music" excerpts: 12 original electric solos,
+amp-mic recording, ground truth from a per-string MIDI pickup recorded with the audio (string =
+track, fret = pitch - open string, no alignment needed). `eval/real/gtechs_to_real.py` builds the
+folders; `eval/real_bench.py` scores them. Not commercial songs and no band, but real playing.
+
+**Weakest area found.** Notes below about D3 were heard 20% of the time vs ~60% above. Cause: on a
+recording with no bass player, htdemucs_6s files the guitar's low register under "bass" (the bass
+stem was often *louder* than the guitar stem). A real bass always sounds under 75 Hz; leaked guitar
+barely does: share of the bass stem's 30-400 Hz energy under 75 Hz is <= 0.04 on every guitar-only
+take we have (GuitarSet 05, Guitar-TECHS) and >= 0.27 on every take with a real or synthesized bass
+(GuitarSet band variants, the 3-guitar demo, the Comfortably Numb cover). Fix: when the share is
+under 0.15, the bass stem is added back to the guitar stem before transcription (and playback).
+Band mixes are untouched (the rule never fires on them).
+
+| 12 solos, mean | note F1 | tab F1 | string+fret right (heard notes) |
+|---|---|---|---|
+| p2.6 | 0.60 | 0.34 | 0.56 |
+| p2.7 | **0.66** | **0.37** | 0.55 |
+
+Biggest gains: gt-02 0.55 -> 0.83, gt-12 0.51 -> 0.69, gt-01 0.56 -> 0.70 (note F1). Two solos
+lost tab F1 (gt-05 0.62 -> 0.40, gt-09 0.25 -> 0.19) with the same notes heard: the extra low
+notes moved the fingering to a different, equally playable position. Tempo octave on these solos:
+9/12 right; the three misses are 50-58 BPM pieces shown at 1.5-2x.
+
+**Next weakest: position choice.** On these solos the player sits higher up the neck (mean fret
+7.4) than TabGen places notes (6.4); a fret-12 phrase on the A/D/G strings comes out at fret 7 on
+the next string up. Same pitches, different (playable) tab — see gap 7.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch
@@ -243,8 +273,9 @@ string move (pitch kept), technique, add, delete, keyboard, revert, chord per be
    picked material is now high; recall is unknown.
 6. **Slide precision ~0.6, recall ~0.4** — slides are often confused with vibrato wobble or a re-pick; a small
    learned transition classifier (IDMT + synthetic) would help.
-7. **Fingering still ~30% wrong on electric licks** where several positions are equally playable.
+7. **Fingering still ~30-45% wrong on electric solos** where several positions are equally playable
+   (Guitar-TECHS: 0.55 right; TabGen sits ~1 fret lower than players who play up the neck, §9).
    TabCNN's prior is the main audio cue; a timbre-based string classifier would close more of it.
 8. Editing, tuner and play-along exist (p2.6). Play-along is weak on jazz/bossa voicings and needs
-   headphones; there is no Guitar Pro export yet; nobody has scored TabGen on a real commercial
-   song with a trusted tab — `eval/real_bench.py` is ready for that, it needs the songs.
+   headphones; there is no Guitar Pro export yet. Real electric solos are now scored (§9); a real commercial
+   song with a trusted tab is still missing (GOAT has covers + Guitar Pro tabs, by request).

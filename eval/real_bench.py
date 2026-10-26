@@ -4,8 +4,10 @@ One folder per song under data/eval/real/<name>/ (personal copies, never committ
 
   audio.mp3 | .m4a | .wav | .flac   the recording
   ref.gp | .gp5 | .gpx | .musicxml | .alphatex   a tab you trust for that recording
+  (or ref.json in score2json's format, e.g. from eval/real/gtechs_to_real.py)
   meta.json (optional)   {"tracks": [0, 2]}  which reference tracks are guitars that you hear
-                         (default: every pitched track with 6+ strings), "title": "..."
+                         (default: every pitched track with 6+ strings), "title": "...",
+                         "synced": true  the reference is already on the recording's timeline
 
 The reference is converted by eval/real/score2json.mjs (alphaTab, repeats unrolled), then aligned
 to the recording with DTW on chroma: tab files are not in sync with recordings (count-ins, tempo
@@ -259,7 +261,10 @@ def evaluate_song(d: Path, reanalyze: bool) -> dict:
     guitar = separate.stems_dir(track_dir(audio_hash)) / "guitar.wav"
 
     all_ref = sorted((n for t in tracks for n in t["notes"]), key=lambda n: n["start"])
-    fn, cost = align(all_ref, _audio_chroma(guitar), ref["duration"], _onset_env(guitar))
+    if meta.get("synced"):  # reference recorded with the audio (e.g. a MIDI pickup): no alignment
+        fn, cost = (lambda t: t), 0.0
+    else:
+        fn, cost = align(all_ref, _audio_chroma(guitar), ref["duration"], _onset_env(guitar))
     warped = {t["index"]: warp(t["notes"], fn) for t in tracks}
     union_ref = sorted((n for ns in warped.values() for n in ns), key=lambda n: n["start"])
 

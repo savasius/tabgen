@@ -197,7 +197,10 @@ def resolve_playback(track: Path, stem: str) -> tuple[Path, str]:
             return mix, "audio/wav"
         raise FileNotFoundError("Mix audio missing")
     if kind in ("guitar", "gitar"):
-        guitar = stems_dir(track) / "guitar.wav"
+        # the guitar stem with its leaked low notes put back, when the analysis did that
+        guitar = stems_dir(track) / "guitar_plus_bass.wav"
+        if not guitar.exists():
+            guitar = stems_dir(track) / "guitar.wav"
         if guitar.exists():
             return guitar, "audio/wav"
         raise FileNotFoundError("Guitar stem not available — reanalyze this song")

@@ -16,6 +16,7 @@ import numpy as np
 import soundfile as sf
 
 from ..config import models_dir
+from .separate import is_mix_copy
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class GuitarStemError(RuntimeError):
 @dataclass(frozen=True)
 class GuitarSource:
     path: Path
-    source: str  # guitar | guitar+other | guitar-weak
+    source: str  # guitar | guitar+bass | guitar+other | guitar+bass+other | guitar-weak
     rms: float
     mix_rms: float
     ratio: float
@@ -54,9 +55,7 @@ class GuitarSource:
     empty: bool = False
 
     def cache_tag(self) -> str:
-        if self.source == "guitar+other":
-            return "guitarplusother"
-        return "guitar"
+        return self.source.removesuffix("-weak").replace("+", "plus")
 
 TABCNN_URL = "https://huggingface.co/cstr/tabcnn-onnx/resolve/main/tabcnn-gpfx.onnx"
 TABCNN_SHA256 = "8d9ce59157bdab37fb4816d32d7f29f3da0cdbf3c7876707c819af4d1f88e6b7"
@@ -144,8 +143,42 @@ def sum_wavs(a: Path, b: Path, dest: Path) -> None:
     sf.write(str(dest), mixed, sr)
 
 
+# Bass-stem leakage. On a recording with no bass player, htdemucs_6s files much of the guitar's
+# low register (E/A/D strings) under "bass" -- on Guitar-TECHS solos the bass stem was often louder
+# than the guitar stem, and notes below D3 were heard 20% of the time instead of 60%. A real bass
+# always sounds under 75 Hz (its E and A strings); leaked guitar barely does. Share of 30-400 Hz
+# energy under 75 Hz in the bass stem: guitar-only takes (GuitarSet 05, Guitar-TECHS P3) <= 0.04,
+# real or synthesized bass lines >= 0.27. Drop-tuned guitars read as "bass" (unchanged behaviour).
+BASS_LOW_HZ = 75.0
+BASS_LEAK_MAX_LOW = 0.15
+BASS_LEAK_MIN_RATIO = 0.05  # bass stem RMS vs guitar stem: below this there is nothing to recover
+
+
+def bass_low_share(path: Path) -> float:
+    """Fraction of the stem's 30-400 Hz energy that lies under BASS_LOW_HZ."""
+    wav, sr = sf.read(str(path), dtype="float32", always_2d=False)
+    y = wav.mean(axis=1) if getattr(wav, "ndim", 1) == 2 else wav
+    n = 1 << 15
+    if len(y) < n:
+        y = np.pad(y, (0, n - len(y)))
+    win = np.hanning(n).astype(np.float32)
+    power = np.zeros(n // 2 + 1)
+    for k in range(0, len(y) - n + 1, n // 2):
+        power += np.abs(np.fft.rfft(y[k:k + n] * win)) ** 2
+    f = np.fft.rfftfreq(n, 1 / sr)
+    total = power[(f > 30) & (f < 400)].sum()
+    return float(power[(f > 30) & (f < BASS_LOW_HZ)].sum() / total) if total > 0 else 1.0
+
+
+def bass_is_guitar_leak(bass: Path, guitar_rms: float) -> bool:
+    b = rms_path(bass)
+    return b >= BASS_LEAK_MIN_RATIO * max(guitar_rms, 1e-9) and b >= EMPTY_RMS \
+        and bass_low_share(bass) < BASS_LEAK_MAX_LOW
+
+
 def pick_guitar_source(stems: Path, mix: Path) -> GuitarSource:
-    """Isolated guitar (or guitar+other on 6-stem bleed). Never mix, never harmonic."""
+    """Isolated guitar (+ the bass stem when it is only leaked guitar, + other on 6-stem bleed).
+    Never mix, never harmonic, never a real bass line."""
     if stems is None:
         raise GuitarStemError(
             "No stem directory — Demucs did not run. The mix is not used as a fallback."
@@ -158,8 +191,15 @@ def pick_guitar_source(stems: Path, mix: Path) -> GuitarSource:
         )
     g = rms_path(guitar)
     m = rms_path(mix)
+    base, base_source = guitar, "guitar"
+    bass = stems / "bass.wav"
+    # (eval mode copies the input into every stem slot: a copy is not leakage)
+    if bass.exists() and not is_mix_copy(bass, guitar) and bass_is_guitar_leak(bass, g):
+        base, base_source = stems / "guitar_plus_bass.wav", "guitar+bass"
+        sum_wavs(guitar, bass, base)
+        g = rms_path(base)
     chosen = GuitarSource(
-        path=guitar, source="guitar", rms=g, mix_rms=m,
+        path=base, source=base_source, rms=g, mix_rms=m,
         ratio=g / max(m, 1e-9), warning=None, empty=False,
     )
     if chosen.ratio >= WEAK_RATIO and g >= EMPTY_RMS:
@@ -167,13 +207,13 @@ def pick_guitar_source(stems: Path, mix: Path) -> GuitarSource:
 
     other = stems / "other.wav"
     if other.exists():
-        combo = stems / "guitar_plus_other.wav"
-        sum_wavs(guitar, other, combo)
+        combo = stems / base.name.replace(".wav", "_plus_other.wav")
+        sum_wavs(base, other, combo)
         c = rms_path(combo)
         c_ratio = c / max(m, 1e-9)
         if c_ratio > chosen.ratio * 1.25 and c >= EMPTY_RMS:
             chosen = GuitarSource(
-                path=combo, source="guitar+other", rms=c, mix_rms=m,
+                path=combo, source=f"{base_source}+other", rms=c, mix_rms=m,
                 ratio=c_ratio, warning=None, empty=False,
             )
             if chosen.ratio >= WEAK_RATIO:
