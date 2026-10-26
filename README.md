@@ -44,8 +44,11 @@ Menü: *Sunucuyu yeniden başlat* (⇧⌘R), *Tarayıcıda aç* (⇧⌘O). Kald�
 
 **Telefon:** analiz Mac'te yapılır, telefon sadece ekrandır. Telefonda `http://<mac-ip>:8000` aç,
 Safari'de *Paylaş → Ana Ekrana Ekle*: TabGen ikonuyla tam ekran açılır. Telefon tarayıcıları mikrofonu
-yalnızca güvenli (https) bağlantıda verir; akort ve birlikte çal için https gerekir (ör. Tailscale:
-`tailscale serve --bg 8000`, sonra telefonda `https://<mac-adı>.<tailnet>.ts.net`).
+yalnızca güvenli (https) bağlantıda verir; akort ve birlikte çal için https gerekir. En kolayı Tailscale:
+Mac'e ve telefona kur, aynı hesapla gir, Mac'te bir kez
+`/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg 8000` çalıştır (ilk seferde verdiği
+linkten Serve'ü aç). Telefonda `https://<mac-adı>.<tailnet>.ts.net` — sadece senin cihazların görür,
+evden uzaktayken de çalışır. Telefondan girerken Mac'te TabGen açık olmalı (ya da `--background`).
 
 ## Using it
 
