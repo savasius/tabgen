@@ -30,6 +30,23 @@ Linux works the same way (`apt install ffmpeg nodejs python3-venv` first). Windo
 - Force CPU (if Apple GPU/MPS misbehaves): `TABGEN_DEVICE=cpu ./scripts/run.sh`.
 - Data (decoded audio, stems, analyses) lives in `./data/` — delete it to clear the cache.
 
+## Mac uygulaması ve telefon
+
+**Mac:** bir kez `./scripts/install-mac.sh` çalıştır. `~/Applications/TabGen.app` oluşur; Launchpad'den,
+Spotlight'tan açılır, Dock'a sürükleyip bırakabilirsin. Terminal gerekmez: uygulama açılınca sunucuyu
+kendisi başlatır, kapatınca (⌘Q) durdurur. Arayüz kodu değiştiyse açılışta kendini yeniden derler.
+Mikrofon (akort, birlikte çal), dosya seçme ve dışa aktarma (İndirilenler klasörüne) uygulamada çalışır.
+Menü: *Sunucuyu yeniden başlat* (⇧⌘R), *Tarayıcıda aç* (⇧⌘O). Kaldırmak için `./scripts/uninstall-mac.sh`
+(şarkıların `data/` içinde kalır). Yeni kod çektikten sonra `install-mac.sh`'ı tekrar çalıştır.
+
+- `./scripts/install-mac.sh --background`: sunucu uygulama kapalıyken de çalışsın (oturum açınca başlar).
+- `HOST=0.0.0.0 ./scripts/install-mac.sh`: aynı Wi-Fi'deki telefon da bağlanabilsin.
+
+**Telefon:** analiz Mac'te yapılır, telefon sadece ekrandır. Telefonda `http://<mac-ip>:8000` aç,
+Safari'de *Paylaş → Ana Ekrana Ekle*: TabGen ikonuyla tam ekran açılır. Telefon tarayıcıları mikrofonu
+yalnızca güvenli (https) bağlantıda verir; akort ve birlikte çal için https gerekir (ör. Tailscale:
+`tailscale serve --bg 8000`, sonra telefonda `https://<mac-adı>.<tailnet>.ts.net`).
+
 ## Using it
 
 | Control | What it does |
