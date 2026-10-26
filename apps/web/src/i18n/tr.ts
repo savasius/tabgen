@@ -454,6 +454,17 @@ export const tr = {
       controls: "4. Hızı düşür, bir bölümü tekrar et, kapoyu ayarla.",
     },
   },
+  mic: {
+    insecure: "Bu bağlantıda mikrofon kapalı. Telefonda TabGen'i Tailscale adresinden (https://…ts.net) aç: tarayıcılar http adreslerinde mikrofona izin vermez.",
+    denied: {
+      "mac-app": "Mikrofon izni kapalı. Sistem Ayarları → Gizlilik ve Güvenlik → Mikrofon'da TabGen'i aç, sonra TabGen'i kapatıp yeniden aç.",
+      ios: "Mikrofon izni kapalı. Ayarlar → Safari → Mikrofon'u \"Sor\" ya da \"İzin Ver\" yap, sonra TabGen'i kapatıp yeniden aç.",
+      browser: "Mikrofon izni kapalı. Adres çubuğundaki kilit simgesinden mikrofona izin ver ve sayfayı yenile.",
+    },
+    nodevice: "Mikrofon bulunamadı. Bir mikrofon ya da ses kartı bağlı mı?",
+    busy: "Mikrofonu başka bir uygulama kullanıyor (ör. Zoom, GarageBand). Onu kapatıp tekrar dene.",
+    other: "Mikrofon açılamadı. Sayfayı yenileyip tekrar dene.",
+  },
   time: { justNow: "az önce", minutesAgo: "{n} dk önce", hoursAgo: "{n} saat önce", daysAgo: "{n} gün önce" },
 } as const;
 

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Headphones, Mic, MicOff } from 'lucide-react'
 import type { Section } from '@/api'
 import { useSong, soundingSpelling } from './song-session'
-import { useApp } from '@/lib/store'
+import { useApp, type TKey } from '@/lib/store'
+import { micErrorKey, openMic } from '@/lib/mic'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { Transport } from '@/components/app/Transport'
@@ -53,9 +54,7 @@ export function PlayAlong() {
     let stopped = false
     const run = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-        })
+        stream = await openMic({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
         if (stopped) { stream.getTracks().forEach((tr) => tr.stop()); return }
         ctx = new AudioContext()
         await ctx.resume()
@@ -91,8 +90,8 @@ export function PlayAlong() {
           }
           if (++frames % 4 === 0) setTick((x) => x + 1)
         }, 50)
-      } catch {
-        setMicErr(t('tuner.noMic'))
+      } catch (e) {
+        setMicErr(t(micErrorKey(e) as TKey))
         setListening(false)
       }
     }

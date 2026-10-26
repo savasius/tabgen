@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Mic, Upload, FileVideo } from 'lucide-react'
-import { useApp } from '@/lib/store'
+import { useApp, type TKey } from '@/lib/store'
+import { micErrorKey, openMic } from '@/lib/mic'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -191,7 +192,7 @@ function MicPanel() {
   const start = async () => {
     setErr(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } })
+      const stream = await openMic({ echoCancellation: false, noiseSuppression: false })
       streamRef.current = stream
       const mr = new MediaRecorder(stream)
       chunks.current = []
@@ -222,8 +223,8 @@ function MicPanel() {
         setSec(Math.floor((Date.now() - started) / 1000))
         tick()
       }, 200)
-    } catch {
-      setErr(t('add.mic.permission'))
+    } catch (e) {
+      setErr(t(micErrorKey(e) as TKey))
     }
   }
 
@@ -234,7 +235,9 @@ function MicPanel() {
 
   const analyze = async () => {
     if (!blob) return
-    const file = new File([blob], `mic-${Date.now()}.webm`, { type: blob.type })
+    // Safari / the Mac app record MP4 (AAC), Chrome and Firefox WebM
+    const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+    const file = new File([blob], `mic-${Date.now()}.${ext}`, { type: blob.type })
     try {
       const job = await api.upload(file)
       goJob(nav, job.id, t('add.tabs.mic'), 'mic')

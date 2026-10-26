@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         conf.websiteDataStore = .default() // keeps settings / localStorage between launches
         conf.mediaTypesRequiringUserActionForPlayback = []
         conf.preferences.isElementFullscreenEnabled = true
+        conf.applicationNameForUserAgent = "Version/17.0 Safari/605.1.15 TabGenMac/1" // lib/mic.ts reads this
         web = WKWebView(frame: .zero, configuration: conf)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -120,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         env["NO_BROWSER"] = "1"
+        env["PYTHONUNBUFFERED"] = "1" // data/logs/server.log shows requests as they happen
         env["PORT"] = String(serverURL.port ?? 8000)
         env["HOST"] = Bundle.main.object(forInfoDictionaryKey: "TabGenHost") as? String ?? "127.0.0.1"
         p.environment = env
@@ -237,8 +239,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         // only our own page, only the microphone; macOS still asks the user once (Info.plist text)
         guard origin.host == serverURL.host, type == .microphone else { return decisionHandler(.deny) }
-        AVCaptureDevice.requestAccess(for: .audio) { ok in
-            DispatchQueue.main.async { decisionHandler(ok ? .grant : .deny) }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            decisionHandler(.grant)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { ok in
+                DispatchQueue.main.async {
+                    decisionHandler(ok ? .grant : .deny)
+                    if !ok { self.micDeniedAlert() }
+                }
+            }
+        default: // refused earlier (or by a profile): macOS will not ask again, so say where to fix it
+            decisionHandler(.deny)
+            micDeniedAlert()
+        }
+    }
+
+    func micDeniedAlert() {
+        let a = NSAlert()
+        a.messageText = "Mikrofon izni kapalı"
+        a.informativeText = "Akort, birlikte çal ve kayıt için TabGen'in mikrofonu duyması gerekiyor. "
+            + "Sistem Ayarları → Gizlilik ve Güvenlik → Mikrofon'da TabGen'i aç, sonra TabGen'i yeniden başlat."
+        a.addButton(withTitle: "Ayarları aç")
+        a.addButton(withTitle: "Vazgeç")
+        a.beginSheetModal(for: window) { r in
+            if r == .alertFirstButtonReturn,
+               let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type TKey } from '@/lib/store'
+import { micErrorKey, openMic } from '@/lib/mic'
 import { TUNINGS, type TuningId } from '@/lib/tunings'
 import { centsBetween, detectPitch, nearestNote, PitchSmoother } from '@/lib/pitch'
 import { Button } from '@/components/ui/button'
@@ -45,9 +46,7 @@ export function Tuner() {
     let quiet = 0
     const run = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-        })
+        stream = await openMic({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
         if (stopped) { stream.getTracks().forEach((tr) => tr.stop()); return }
         ctx = new AudioContext()
         if (ctx.state === 'suspended') setNeedsTap(true)
@@ -94,8 +93,8 @@ export function Tuner() {
         }
         raf = requestAnimationFrame(tick)
         start.current = () => { void ctx?.resume().then(() => setNeedsTap(false)) }
-      } catch {
-        setErr(t('tuner.noMic'))
+      } catch (e) {
+        setErr(t(micErrorKey(e) as TKey))
       }
     }
     void run()

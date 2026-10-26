@@ -443,5 +443,16 @@ export const en: Dict = {
       controls: "4. Slow down, loop a section, set the capo.",
     },
   },
+  mic: {
+    insecure: "The microphone is off on this connection. On the phone open TabGen at its Tailscale address (https://…ts.net): browsers block the microphone on http addresses.",
+    denied: {
+      "mac-app": "Microphone access is off. Turn TabGen on in System Settings → Privacy & Security → Microphone, then quit and reopen TabGen.",
+      ios: "Microphone access is off. Set Settings → Safari → Microphone to \"Ask\" or \"Allow\", then close and reopen TabGen.",
+      browser: "Microphone access is off. Allow it from the lock icon in the address bar and reload the page.",
+    },
+    nodevice: "No microphone found. Is a microphone or audio interface connected?",
+    busy: "Another app is using the microphone (e.g. Zoom, GarageBand). Close it and try again.",
+    other: "Couldn't open the microphone. Reload the page and try again.",
+  },
   time: { justNow: "just now", minutesAgo: "{n} min ago", hoursAgo: "{n} h ago", daysAgo: "{n} d ago" },
 };
