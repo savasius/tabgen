@@ -59,8 +59,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>TabGenHost</key><string>$HOST</string>
 </dict></plist>
 PLIST
-# ad-hoc signature: lets macOS remember the microphone permission for this app
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
+# Sign with your own Apple certificate when there is one: with only an ad-hoc signature macOS
+# grants the microphone, yet WebKit's capture delivers no audio to the page (0-byte recordings).
+IDENTITY="${TABGEN_SIGN_IDENTITY:-$(security find-identity -p codesigning -v 2>/dev/null \
+  | sed -nE 's/.*"((Apple Development|Developer ID Application): .*)"/\1/p' | head -1)}"
+if [[ -n "$IDENTITY" ]] && codesign --force --deep --sign "$IDENTITY" "$APP" >/dev/null 2>&1; then
+  echo "    signed with: $IDENTITY"
+else
+  codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
+  echo "    ad-hoc signed (no Apple certificate found): the microphone may not work in the app"
+fi
 
 if ((!BACKGROUND)); then
   say "Done. Open TabGen from Launchpad, Spotlight or ~/Applications (drag it to the Dock to keep it)."

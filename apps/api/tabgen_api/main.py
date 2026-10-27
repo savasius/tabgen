@@ -265,6 +265,17 @@ def get_audio(analysis_id: str, stem: str = Query("mix", description="mix | orig
     return FileResponse(path, media_type=media)
 
 
+class _WebFiles(StaticFiles):
+    """The built web app. index.html is always revalidated, so a phone or the Mac app picks up a
+    new build instead of a cached page pointing at old (hashed) scripts."""
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if path in ("", ".", "index.html") or path.endswith(".webmanifest"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
 _WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 if _WEB_DIST.exists():
-    app.mount("/", StaticFiles(directory=_WEB_DIST, html=True), name="web")
+    app.mount("/", _WebFiles(directory=_WEB_DIST, html=True), name="web")

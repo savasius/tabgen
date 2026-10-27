@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Mic, Upload, FileVideo } from 'lucide-react'
 import { useApp, type TKey } from '@/lib/store'
-import { micErrorKey, openMic } from '@/lib/mic'
+import { micErrorKey, openMic, recordingExt } from '@/lib/mic'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -198,12 +198,21 @@ function MicPanel() {
       chunks.current = []
       mr.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data) }
       mr.onstop = () => {
-        setBlob(new Blob(chunks.current, { type: mr.mimeType || 'audio/webm' }))
-        setRec('done')
         stopTracks()
+        const type = mr.mimeType || chunks.current[0]?.type || ''
+        const b = new Blob(chunks.current, type ? { type } : undefined)
+        if (!b.size) {
+          // nothing reached the recorder: don't upload an empty file the analysis can't read
+          setErr(t('add.mic.empty'))
+          setRec('idle')
+          return
+        }
+        setBlob(b)
+        setRec('done')
       }
+      mr.onerror = () => setErr(t('add.mic.empty'))
       recRef.current = mr
-      mr.start()
+      mr.start(1000) // hand data over every second, so a long take is never lost at the end
       setRec('live')
       setSec(0)
       const started = Date.now()
@@ -236,7 +245,7 @@ function MicPanel() {
   const analyze = async () => {
     if (!blob) return
     // Safari / the Mac app record MP4 (AAC), Chrome and Firefox WebM
-    const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+    const ext = await recordingExt(blob)
     const file = new File([blob], `mic-${Date.now()}.${ext}`, { type: blob.type })
     try {
       const job = await api.upload(file)
@@ -275,7 +284,6 @@ function MicPanel() {
         {rec === 'live' && <Button variant="destructive" onClick={stop}>{t('add.mic.stop')}</Button>}
         {rec === 'done' && (
           <div className="flex flex-col items-center gap-2">
-            {sec < 30 && <p className="text-xs text-warning">{t('add.mic.minDuration')}</p>}
             <div className="flex gap-2">
               <Button variant="glow" onClick={() => void analyze()}>{t('add.mic.analyze')}</Button>
               <Button variant="outline" onClick={() => { setRec('idle'); setBlob(null); setSec(0) }}>{t('add.mic.again')}</Button>

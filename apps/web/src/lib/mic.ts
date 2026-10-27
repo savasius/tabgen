@@ -45,3 +45,15 @@ export function micErrorKey(e: unknown, place: MicPlace = micPlace()): string {
   const p = e instanceof MicError ? e.problem : micProblem(e)
   return p === 'denied' ? `mic.denied.${place}` : `mic.${p}`
 }
+
+/** File extension for a MediaRecorder blob, read from its first bytes (the reported type can be
+ * empty or generic): MP4 from Safari / the Mac app, WebM from Chrome, Ogg from Firefox. */
+export async function recordingExt(blob: Blob): Promise<string> {
+  const h = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
+  const ascii = (a: number, b: number) => String.fromCharCode(...h.slice(a, b))
+  if (ascii(4, 8) === 'ftyp') return 'm4a'
+  if (h[0] === 0x1a && h[1] === 0x45 && h[2] === 0xdf && h[3] === 0xa3) return 'webm'
+  if (ascii(0, 4) === 'OggS') return 'ogg'
+  if (ascii(0, 4) === 'RIFF') return 'wav'
+  return blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+}
