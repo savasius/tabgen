@@ -137,11 +137,19 @@ export interface LibraryEntry {
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
 
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let msg = res.statusText
     try { msg = (await res.json()).detail ?? msg } catch { /* not json */ }
-    throw new Error(msg)
+    throw new ApiError(res.status, msg)
   }
   return res.json()
 }

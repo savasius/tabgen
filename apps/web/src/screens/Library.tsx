@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/dropdown'
 import { Segmented } from '@/components/ui/segmented'
 import { coverHue } from '@/lib/utils'
-import { api, type Job, type LibraryEntry } from '@/api'
+import { api, ApiError, type Job, type LibraryEntry } from '@/api'
 import { lastPlayedMap, listFavorites, listTrackedJobs, toggleFavorite, untrackJob, type TrackedJob } from '@/lib/local'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -56,8 +56,11 @@ export function Library() {
           if (job.status === 'done' && job.analysis_id) untrackJob(j.id)
           else if (job.status === 'failed') next.push({ ...j, job })
           else next.push({ ...j, job })
-        } catch {
-          next.push(j)
+        } catch (e) {
+          // jobs live in the server's memory: after a restart it no longer knows this one, and
+          // asking again forever won't change that (a finished song is in the library anyway)
+          if (e instanceof ApiError && e.status === 404) untrackJob(j.id)
+          else next.push(j)
         }
       }
       if (!stop) {
