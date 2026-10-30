@@ -155,7 +155,7 @@ export function PlayAlong() {
         <h2 className="text-xl font-semibold">{t('play.title')}</h2>
         <p className="text-sm text-muted-foreground">{t('play.subtitle')}</p>
       </div>
-      <p className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">{t('play.beta')}</p>
+      <p className="text-xs text-muted-foreground">{t('play.beta')}</p>
       <Segmented
         value={mode}
         onChange={setMode}
@@ -164,7 +164,7 @@ export function PlayAlong() {
           { value: 'notes', label: t('play.mode.notes'), disabled: !a.tab?.notes?.length },
         ]}
       />
-      <div>
+      {a.sections.length > 1 && <div>
         <p className="mb-2 text-sm font-medium">{t('play.pickSection')}</p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -188,7 +188,7 @@ export function PlayAlong() {
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
       <div
         className={cn(
@@ -252,27 +252,6 @@ export function PlayAlong() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <Headphones className="mt-0.5 size-5 text-primary" />
-          <div className="flex-1">
-            <p className="font-medium">{t('play.headphones')}</p>
-            <p className="text-sm text-muted-foreground">{t('play.headphonesBody')}</p>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!headphones} onChange={(e) => setHeadphones(!e.target.checked)} />
-              {t('play.noHeadphones')}
-            </label>
-            {!headphones && <p className="mt-1 text-xs text-warning" data-testid="play-no-headphones">{t('play.noHeadphonesWarn')}</p>}
-            <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              {t('play.latency')}
-              <input type="range" min={0} max={350} step={10} value={latency} onChange={(e) => setLatency(Number(e.target.value))} />
-              <span className="font-mono tabular">{latency} ms</span>
-            </label>
-            <p className="text-xs text-muted-foreground">{t('play.latencyHint')}</p>
-          </div>
-        </div>
-      </div>
-
       {listening ? (
         <Button size="lg" variant="outline" onClick={stop} data-testid="play-stop"><MicOff className="size-4" /> {t('play.stop')}</Button>
       ) : (
@@ -280,7 +259,31 @@ export function PlayAlong() {
       )}
       {micErr && <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{micErr}</p>}
 
-      <div className="sticky bottom-3 z-20">
+      <details className="group rounded-2xl border border-border bg-card" data-testid="play-audio-settings">
+        <summary className="flex cursor-pointer list-none items-center gap-3 p-4 text-sm">
+          <Headphones className="size-5 shrink-0 text-primary" aria-hidden />
+          <span className="flex-1 font-medium">{t('play.audioSettings')}</span>
+          {!headphones && <span className="text-xs text-warning">{t('play.noHeadphonesShort')}</span>}
+          <span className="text-muted-foreground transition-transform group-open:rotate-90" aria-hidden>›</span>
+        </summary>
+        <div className="border-t border-border px-4 pb-4 pt-3">
+          <p className="text-sm text-muted-foreground">{t('play.headphonesBody')}</p>
+          <label className="mt-3 flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!headphones} onChange={(e) => setHeadphones(!e.target.checked)} />
+            {t('play.noHeadphones')}
+          </label>
+          {!headphones && <p className="mt-1 text-xs text-warning" data-testid="play-no-headphones">{t('play.noHeadphonesWarn')}</p>}
+          <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            {t('play.latency')}
+            <input type="range" min={0} max={350} step={10} value={latency} onChange={(e) => setLatency(Number(e.target.value))} />
+            <span className="font-mono tabular">{latency} ms</span>
+          </label>
+          <p className="text-xs text-muted-foreground">{t('play.latencyHint')}</p>
+        </div>
+      </details>
+
+      {/* not sticky here: the start button is the main action and must never sit under the player */}
+      <div>
         <Transport
           time={s.time}
           duration={a.duration}

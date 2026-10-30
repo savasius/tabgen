@@ -187,15 +187,17 @@ export function TabView() {
 
   return (
     <div className="flex flex-col gap-4 pb-44">
-      <SectionStrip
-        sections={a.sections}
-        duration={a.duration}
-        time={s.time}
-        names={sectionNames(a.sections, t, true)}
-        onJump={(sec) => s.seek(sec.start)}
-        onLoop={(_, i) => s.loopSection(i)}
-        loopStart={s.loop?.start}
-      />
+      {a.sections.length > 1 && (
+        <SectionStrip
+          sections={a.sections}
+          duration={a.duration}
+          time={s.time}
+          names={sectionNames(a.sections, t, true)}
+          onJump={(sec) => s.seek(sec.start)}
+          onLoop={(_, i) => s.loopSection(i)}
+          loopStart={s.loop?.start}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -218,7 +220,7 @@ export function TabView() {
             {t('tab.edit.toggle')}
           </label>
         </div>
-        <p className="font-mono text-xs font-semibold tracking-wide text-primary" data-testid="tab-glyph-key">
+        <p className="text-xs text-muted-foreground" data-testid="tab-glyph-key">
           {t('tab.glyphs')}
         </p>
       </div>
@@ -239,6 +241,7 @@ export function TabView() {
           }}
           zoom={zoom}
           emptyHint={t('tab.sectionChords')}
+          sectionLabels={a.sections.length > 1 ? sectionNames(a.sections, t, true) : undefined}
           autoScroll={s.autoScroll && !editing}
           onAdd={editing ? edit.add : undefined}
         />

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart, MoreHorizontal, Plus, Search, Sparkles, Upload, FileVideo, Mic } from 'lucide-react'
+import { Heart, MoreHorizontal, Plus, Search, Sparkles, Upload, Mic } from 'lucide-react'
 import { useApp, relativeTime, type TKey } from '@/lib/store'
 import { Cover } from '@/components/app/Cover'
 import { Badge } from '@/components/ui/badge'
@@ -213,29 +213,42 @@ export function Library() {
 
 function EmptyLibrary() {
   const { t } = useApp()
+  const steps = [t('library.empty.step1'), t('library.empty.step2'), t('library.empty.step3')]
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center px-6 py-20 text-center">
-      <div className="mb-5 grid size-16 place-items-center rounded-2xl bg-primary/15 text-primary">
-        <Plus className="size-8" />
+    <div className="mx-auto flex max-w-2xl flex-col items-center px-6 py-14 text-center md:py-20">
+      <div className="mb-6 grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_10px_40px_-10px_var(--primary)]">
+        <svg viewBox="0 0 24 24" className="size-9" aria-hidden>
+          <g stroke="currentColor" strokeWidth="1.8" fill="none">
+            <path d="M6 5v14M10 5v14M14 5v14M18 5v14" opacity=".55" />
+            <circle cx="10" cy="10" r="1.8" fill="currentColor" />
+            <circle cx="14" cy="14" r="1.8" fill="currentColor" />
+          </g>
+        </svg>
       </div>
-      <h1 className="text-2xl font-semibold">{t('library.empty.title')}</h1>
-      <p className="mt-2 text-muted-foreground">{t('library.empty.body')}</p>
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button asChild variant="glow">
-          <Link to="/add">{t('library.empty.cta')}</Link>
-        </Button>
-      </div>
-      <div className="mt-10 grid w-full grid-cols-3 gap-2 text-xs text-muted-foreground">
-        <Link to="/add?tab=file" className="rounded-xl border border-border p-3 hover:bg-accent">
-          <Upload className="mx-auto mb-1 size-4" /> {t('add.tabs.file')}
+      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{t('library.empty.title')}</h1>
+      <p className="mt-3 max-w-md text-muted-foreground">{t('library.empty.body')}</p>
+
+      <div className="mt-10 grid w-full gap-3 sm:grid-cols-2">
+        <Link to="/add?tab=mic" className="group rounded-2xl border border-primary/40 bg-primary/10 p-5 text-left transition-colors hover:bg-primary/15">
+          <Mic className="mb-3 size-6 text-primary" />
+          <p className="font-semibold">{t('library.empty.recordTitle')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('library.empty.recordBody')}</p>
         </Link>
-        <Link to="/add?tab=youtube" className="rounded-xl border border-border p-3 hover:bg-accent">
-          <FileVideo className="mx-auto mb-1 size-4" /> {t('add.tabs.youtube')}
-        </Link>
-        <Link to="/add?tab=mic" className="rounded-xl border border-border p-3 hover:bg-accent">
-          <Mic className="mx-auto mb-1 size-4" /> {t('add.tabs.mic')}
+        <Link to="/add?tab=file" className="group rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:bg-accent/40">
+          <Upload className="mb-3 size-6 text-primary" />
+          <p className="font-semibold">{t('library.empty.uploadTitle')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('library.empty.uploadBody')}</p>
         </Link>
       </div>
+
+      <ol className="mt-10 grid w-full gap-4 text-left sm:grid-cols-3">
+        {steps.map((st, i) => (
+          <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-semibold text-foreground">{i + 1}</span>
+            {st}
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

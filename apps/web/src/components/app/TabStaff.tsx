@@ -12,10 +12,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out
 }
 
-function sectionAt(analysis: Analysis, barIndex: number): string {
+function sectionAt(analysis: Analysis, barIndex: number, labels?: string[]): string {
   const sec = analysis.bars[barIndex]?.section
-  if (sec == null) return ''
-  return analysis.sections[sec]?.label ?? ''
+  if (sec == null || !labels) return ''  // no labels: one section or none, nothing worth marking
+  return labels[sec] ?? ''
 }
 
 function Staff({
@@ -32,6 +32,7 @@ function Staff({
   autoScroll,
   analysis,
   onAdd,
+  sectionLabels,
 }: {
   bars: number[]
   notes: StaffNote[]
@@ -47,6 +48,7 @@ function Staff({
   analysis: Analysis
   /** double-click on an empty spot: bar, 16th position in the bar, display string (1 = high e) */
   onAdd?: (bar: number, pos: number, string: number) => void
+  sectionLabels?: string[]
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const barW = 300 * zoom
@@ -105,8 +107,8 @@ function Staff({
           ))}
           {bars.map((b, i) => {
             const x0 = gutter + 8 + i * barW
-            const label = sectionAt(analysis, b)
-            const prev = i > 0 ? sectionAt(analysis, bars[i - 1]) : ''
+            const label = sectionAt(analysis, b, sectionLabels)
+            const prev = i > 0 ? sectionAt(analysis, bars[i - 1], sectionLabels) : ''
             const showSec = label && label !== prev
             return (
               <g key={b}>
@@ -353,6 +355,7 @@ export function TabStaff({
   emptyHint,
   autoScroll,
   onAdd,
+  sectionLabels,
 }: {
   analysis: Analysis
   notes: StaffNote[]
@@ -366,6 +369,8 @@ export function TabStaff({
   autoScroll: boolean
   /** editing: double-click an empty spot to add a note (empty rows stay drawn) */
   onAdd?: (bar: number, pos: number, string: number) => void
+  /** translated section names; omitted when the song has no real sections */
+  sectionLabels?: string[]
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [perRow, setPerRow] = useState(4)
@@ -410,6 +415,7 @@ export function TabStaff({
           autoScroll={autoScroll}
           analysis={analysis}
           onAdd={onAdd}
+          sectionLabels={sectionLabels}
         />
       ))}
     </div>
