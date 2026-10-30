@@ -95,8 +95,19 @@ def ensure_tabcnn() -> Path | None:
         return path if path.exists() else None
 
 
+def _quiet_onnxruntime() -> None:
+    """onnxruntime's usage telemetry can spin a core at process exit while it tries to flush
+    (seen on macOS: the analysis finished, the process never did). TabGen sends nothing anyway."""
+    try:
+        import onnxruntime as ort
+        ort.disable_telemetry_events()
+    except Exception:  # noqa: BLE001 -- older/newer builds without the switch
+        pass
+
+
 def _bp():
     global _bp_model
+    _quiet_onnxruntime()
     if _bp_model is None:
         from basic_pitch import FilenameSuffix, build_icassp_2022_model_path
         from basic_pitch.inference import Model
@@ -115,6 +126,7 @@ def _tabcnn():
             return None
         try:
             import onnxruntime as ort
+            _quiet_onnxruntime()
             _tabcnn_sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
         except Exception as e:
             log.warning("TabCNN session failed: %s", e)

@@ -288,7 +288,12 @@ on the CPU. `tabgen_analysis/coreml_demucs.py` converts the network between STFT
 ML program once (fp32) and runs it on the GPU; STFT, masking and Demucs' overlap-add stay in PyTorch.
 2:22 song on an M1 Pro: separation 52.6 s -> 14.9 s, whole analysis 95 s -> 58 s. The 12 P3 solos
 analyzed from scratch this way score the same (note F1 0.688 -> 0.686, tab F1 0.391 -> 0.395: run-to-
-run noise; two CPU runs differ as much). Next slowest: All-In-One sections, 24 s.
+run noise; two CPU runs differ as much). All-In-One (sections + its beat grid) then took 24 s: 14 s of it
+in madmom-infer's NumPy Viterbi, which `tabgen_analysis/fast_hmm.py` replaces with the same algorithm
+compiled by Numba (identical output, tests/test_fast_hmm.py; byte-identical All-In-One result on the
+song), and ~3 s reloading the 8-model ensemble, now kept loaded by the server. Sections 24 -> 14 s;
+whole analysis of the 2:22 song 95 -> 45 s. onnxruntime telemetry is switched off: its shutdown flush
+could spin a core after the analysis had finished.
 
 ## 6. Remaining gaps, ranked by impact
 

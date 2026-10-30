@@ -181,7 +181,7 @@ kaçmış gitar mı diye bakılıyor (gerçek bas 75 Hz altında ses verir) ve k
 - Tempo yanlışsa şarkı sayfasında BPM rozetine tıkla: "Vuruş iki kat hızlı / yarı hızda". Şarkı birkaç
   saniyede yeni tempoyla yeniden hazırlanır; tab düzeltmelerin korunur.
 - Mac'te analiz daha hızlı: enstrüman ayırma grafik çipinde (Core ML) çalışıyor. 2,5 dakikalık bir şarkı
-  95 saniye yerine yaklaşık 1 dakikada hazır. İlk analizde model bir kez dönüştürülür (~1 dk).
+  95 saniye yerine yaklaşık 45 saniyede hazır. İlk analizde model bir kez dönüştürülür (~1 dk).
 
 ## Kendi şarkılarınla ölçüm
 
