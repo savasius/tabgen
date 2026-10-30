@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Download, Info } from 'lucide-react'
+import { ArrowLeft, Download, Info, Sparkles } from 'lucide-react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,9 @@ import { chordKey, noteName, spellingForKey, transpose as transposeChord, type L
 import { cn } from '@/lib/utils'
 import { partLabels, withPart } from '@/lib/parts'
 import { SongSessionProvider, soundingSpelling, useSong } from './song-session'
+
+// a guitar 20 cents off is clearly out of tune; below that a note just distracts
+const TUNING_NOTICE_CENTS = 20
 
 export function SongLayout() {
   const { id = '' } = useParams()
@@ -133,8 +136,8 @@ function SongChrome({ parts, partId, setPartId }: {
           </Link>
         </Button>
         <div className="min-w-0 flex-1 basis-40">
-          <h1 className="truncate text-xl font-semibold">{a.meta.title || a.id}</h1>
-          <p className="truncate text-sm text-muted-foreground">{a.meta.artist || '—'}</p>
+          <h1 className="line-clamp-2 text-lg font-semibold leading-tight md:truncate md:text-xl">{a.meta.title || a.id}</h1>
+          {a.meta.artist && <p className="truncate text-sm text-muted-foreground">{a.meta.artist}</p>}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 text-xs md:w-auto">
           <span className="inline-flex items-center gap-1">
@@ -164,9 +167,9 @@ function SongChrome({ parts, partId, setPartId }: {
             </Menu>
             <HelpTip content={t('help.bpm')} />
           </span>
-          <Badge variant="outline">
-            {t('song.tuning')} {a.tuning.guess} · {a.tuning.cents}¢
-          </Badge>
+          {Math.abs(a.tuning.cents) >= TUNING_NOTICE_CENTS && (
+            <Badge variant="outline">{t('song.tuning')} {a.tuning.cents > 0 ? '+' : ''}{a.tuning.cents}¢</Badge>
+          )}
         </div>
         <Menu>
           <MenuTrigger asChild>
@@ -188,9 +191,10 @@ function SongChrome({ parts, partId, setPartId }: {
       {parts.length > 1 && <PartPicker parts={parts} partId={partId} setPartId={setPartId} />}
 
       {a.stale && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
-          {t('song.stale')}
-          <Button size="sm" onClick={() => {
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">{t('song.stale')}</span>
+          <Button size="sm" variant="outline" onClick={() => {
             setReErr(null)
             api.reanalyze(a.id).then((j) => nav(`/processing/${j.id}`)).catch((e) => setReErr(String((e as Error).message)))
           }}>{t('song.reanalyze')}</Button>
@@ -332,13 +336,14 @@ export function ChordsView() {
 
   return (
     <div className="flex flex-col gap-3 pb-28 md:pb-8">
-      {Math.abs(a.tuning.cents) >= 5 && (
-        <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm">
+      {Math.abs(a.tuning.cents) >= TUNING_NOTICE_CENTS && (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
           {t('song.tuningOff', { c: a.tuning.cents })}
         </div>
       )}
 
-      <SectionStrip
+      {/* one section (or none, for a guitar-only take) is just a grey bar: show it when it helps */}
+      {a.sections.length > 1 && <SectionStrip
         sections={a.sections}
         duration={a.duration}
         time={s.time}
@@ -346,7 +351,7 @@ export function ChordsView() {
         onJump={(sec) => s.seek(sec.start)}
         onLoop={(_, i) => s.loopSection(i)}
         loopStart={s.loop?.start}
-      />
+      />}
       <Waveform url={api.audioUrl(a.id)} duration={a.duration} time={s.time} sections={a.sections} onSeek={s.seek} />
 
       <NowNext
@@ -520,7 +525,6 @@ export function ChordsView() {
       )}
       <p className="order-4 text-[11px] text-muted-foreground">
         {t('song.accuracy')} · {t('song.shortcuts')}
-        {a.models.chords ? ` · ${a.models.chords}` : ''}
       </p>
     </div>
   )

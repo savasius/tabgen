@@ -5,7 +5,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +41,7 @@ class LibraryPatch(BaseModel):
 @app.get("/v1/config")
 def get_config():
     return {"url_ingest_enabled": config.URL_INGEST_ENABLED, "device": config.DEVICE,
+            "edition": config.EDITION, "guitar_only": config.GUITAR_ONLY,
             "pipeline_version": PIPELINE_VERSION,
             "audio_stems": ["mix", "original", "guitar"]}
 
@@ -65,7 +66,10 @@ def client_diag(body: _Diag, request: Request):
 
 
 @app.post("/v1/jobs/upload")
-async def create_upload_job(file: UploadFile = File(...)):
+async def create_upload_job(file: UploadFile = File(...), input: str = Form("band")):
+    """`input`: "guitar" when the file is the player's own guitar take (no separation), "band" for a song."""
+    if input not in ("guitar", "band"):
+        raise HTTPException(400, "input must be 'guitar' or 'band'")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
         raise HTTPException(400, f"Unsupported file type: {ext or 'unknown'}")
@@ -74,7 +78,7 @@ async def create_upload_job(file: UploadFile = File(...)):
     fd, tmp = tempfile.mkstemp(suffix=ext, dir=uploads)
     with open(fd, "wb") as out:
         shutil.copyfileobj(file.file, out)
-    job = jobs.submit_upload(Path(tmp), file.filename or "upload")
+    job = jobs.submit_upload(Path(tmp), file.filename or "upload", input)
     return job.to_dict()
 
 

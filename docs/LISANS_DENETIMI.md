@@ -64,3 +64,22 @@ modellerinin lisansı da açıkça yazmıyor). Seçenekler:
 Öneri: **3 ile başlayıp 1'i paralel araştırmak**. Avukatla birlikte All-In-One (bölümler) ve lv-chordia
 (akorlar) için de görüş alınmalı; ikisi de ayırmasız modda daha az önemli (bölümler kısa kayıtlarda
 gerekmiyor).
+
+## Ücretli ayırma servisleri (ilk araştırma, 30 Ekim 2026)
+
+Fiyatların hiçbiri resmi olarak yayımlanmamış; aşağıdakiler resmi sayfalar ve üçüncü taraf
+incelemelerden. Kesin fiyat için firmalarla görüşmek gerekiyor.
+
+| Servis | Gitar kanalı | Nerede çalışıyor | Fiyat | Not |
+|---|---|---|---|---|
+| **AudioShake** | Gitar ve akustik gitar modelleri var | **Cihazda** (SDK: iOS, macOS, Android, Windows) ve bulut | Teklif usulü (info@audioshake.ai) | Plak şirketlerinin kullandığı; cihazda çalıştığı için ses telefondan çıkmaz. SDK'da gitar modelinin olduğu ayrıca teyit edilmeli |
+| **Music.AI (Moises)** | Tüm gitarlar, akustik, elektro, **lead / rhythm** ayrı | Bulut API | Dakika başı (music.ai/pricing) | Lead/rhythm ayrımı bizim çok gitarlı tab özelliğine çok uyar; ses sunucuya gider |
+| **LALAL.AI** | Elektro ve akustik gitar | Bulut API | Kurumsal paketler (ör. 5000 dk ≈ 300 $, doğrulanmadı) | Ses sunucuya gider |
+
+**Öneri:** Önce **AudioShake**'ten cihazda çalışan SDK için teklif istemek (gizlilik + iPhone'da
+tek başına çalışma hedefimize uygun). Bulut seçeneği olarak Music.AI'nin lead/rhythm ayrımı ilginç.
+Bu görüşmeleri siz başlatmalısınız; teknik entegrasyon için Demucs'un yerine başka bir ayırıcı
+takabileceğimiz yapı (`stages/separate.py`) hazır.
+
+Kaynaklar: developer.audioshake.ai/sdk/overview · audioshake.ai/audioshake-models/guitar-separation ·
+music.ai/pricing (üçüncü taraf özetleri) · LALAL.AI incelemeleri (stemsplit.io, capterra.com)

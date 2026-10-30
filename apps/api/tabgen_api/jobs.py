@@ -78,9 +78,9 @@ def _run(job: Job, fetch, meta: dict) -> None:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def submit_upload(upload_path: Path, filename: str) -> Job:
+def submit_upload(upload_path: Path, filename: str, input: str = "band") -> Job:
     job = _new_job()
-    meta = {"title": Path(filename).stem, "source": "upload", "filename": filename}
+    meta = {"title": Path(filename).stem, "source": "upload", "filename": filename, "input": input}
 
     def fetch(tmp: Path):
         moved = tmp / upload_path.name

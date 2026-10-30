@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart, MoreHorizontal, Plus, Search, Upload, FileVideo, Mic } from 'lucide-react'
+import { Heart, MoreHorizontal, Plus, Search, Sparkles, Upload, FileVideo, Mic } from 'lucide-react'
 import { useApp, relativeTime, type TKey } from '@/lib/store'
 import { Cover } from '@/components/app/Cover'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/dropdo
 import { Segmented } from '@/components/ui/segmented'
 import { coverHue } from '@/lib/utils'
 import { api, ApiError, type Job, type LibraryEntry } from '@/api'
-import { lastPlayedMap, listFavorites, listTrackedJobs, toggleFavorite, untrackJob, type TrackedJob } from '@/lib/local'
+import { lastPlayedMap, listFavorites, listTrackedJobs, toggleFavorite, trackJob, untrackJob, type TrackedJob } from '@/lib/local'
 import { useEffect, useMemo, useState } from 'react'
 
 type Filter = 'all' | 'ready' | 'processing' | 'favorites'
@@ -35,6 +35,7 @@ interface CardSong {
 export function Library() {
   const { t } = useApp()
   const [q, setQ] = useState('')
+  const [updating, setUpdating] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
   const [lib, setLib] = useState<LibraryEntry[]>([])
   const [jobs, setJobs] = useState<(TrackedJob & { job?: Job })[]>([])
@@ -79,7 +80,7 @@ export function Library() {
     const ready: CardSong[] = lib.map((e) => ({
       id: e.id,
       title: e.title || e.id,
-      artist: e.artist || '—',
+      artist: e.artist || '',
       status: 'done',
       progress: 100,
       coverHue: coverHue(e.id),
@@ -94,7 +95,7 @@ export function Library() {
       id: j.job?.analysis_id || j.id,
       jobId: j.id,
       title: j.title,
-      artist: j.artist || '—',
+      artist: j.artist || '',
       status: (j.job?.status as CardSong['status']) || 'queued',
       progress: j.job?.progress ?? 0,
       stage: j.job?.stage,
@@ -120,6 +121,7 @@ export function Library() {
   const processing = songs.filter((s) => s.status !== 'done' && s.status !== 'failed')
 
   if (!lib.length && !jobs.length) return <EmptyLibrary />
+  const staleIds = lib.filter((e) => e.stale).map((e) => e.id)
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-6 md:px-8">
@@ -151,6 +153,20 @@ export function Library() {
           ]}
         />
       </div>
+
+      {staleIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm" data-testid="update-all">
+          <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">{t('library.updateAll', { n: staleIds.length })}</span>
+          <Button size="sm" variant="outline" disabled={updating} onClick={() => {
+            setUpdating(true)
+            // queued one after another on the server; the cards turn into "processing" rows
+            void Promise.all(staleIds.map((id) => api.reanalyze(id).then((j) => trackJob({
+              id: j.id, title: lib.find((e) => e.id === id)?.title || id, createdAt: Date.now(), coverHue: 0,
+            })).catch(() => {}))).finally(() => { setUpdating(false); window.location.reload() })
+          }}>{t('library.updateAllButton')}</Button>
+        </div>
+      )}
 
       {!!recent.length && filter === 'all' && !q && (
         <section>
@@ -245,14 +261,20 @@ function SongCard({ song, compact, onFav }: { song: CardSong; compact?: boolean;
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate font-semibold">{song.title}</p>
-              <p className="truncate text-sm text-muted-foreground">{song.artist}</p>
+              {song.artist && <p className="truncate text-sm text-muted-foreground">{song.artist}</p>}
             </div>
             {song.favorite && <Heart className="size-4 shrink-0 fill-primary text-primary" />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge variant={song.status === 'failed' ? 'danger' : song.status === 'done' ? (song.stale ? 'warning' : 'success') : 'primary'}>
-              {song.status === 'done' && song.stale ? t('library.stale') : statusLabel(song, t)}
-            </Badge>
+            {/* a ready song needs no badge; only what the player should notice */}
+            {song.status !== 'done' && (
+              <Badge variant={song.status === 'failed' ? 'danger' : 'primary'}>{statusLabel(song, t)}</Badge>
+            )}
+            {song.status === 'done' && song.stale && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" data-testid="card-stale">
+                <span className="size-1.5 rounded-full bg-primary" aria-hidden /> {t('library.stale')}
+              </span>
+            )}
             {song.status === 'done' && (song.guitars ?? 1) > 1 && (
               <Badge variant="outline" data-testid="card-guitars">{t('library.guitars', { n: song.guitars! })}</Badge>
             )}

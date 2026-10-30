@@ -157,6 +157,10 @@ export function Tuner() {
         </select>
       </div>
 
+      {err && (
+        <p role="alert" className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>
+      )}
+
       {needsTap && (
         <Button className="mt-4 w-full" onClick={() => start.current()}>{t('tuner.startMic')}</Button>
       )}
@@ -215,7 +219,7 @@ export function Tuner() {
       {mode !== 'chromatic' && (
         <Button className="mt-6 w-full" variant="outline" onClick={playTone}>{t('tuner.playTone')}</Button>
       )}
-      {err && <p className="mt-4 text-xs text-destructive">{err}</p>}
+
     </div>
   )
 }

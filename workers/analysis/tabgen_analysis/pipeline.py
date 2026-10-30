@@ -112,10 +112,18 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     mix = track / "mix.wav"
     duration = probe_duration(mix)
 
+    # "guitar": the upload is the player's own guitar take -- no separation model and no section
+    # model run (both need licensed weights, and neither is needed for a lone guitar).
+    guitar_only = (meta or {}).get("input") == "guitar" or config.GUITAR_ONLY
     progress("separating", 8)
-    # Required: a failed Demucs run must fail the job, not silently copy the mix into guitar.wav.
-    stems = timed("separate", lambda: separate.separate(track), required=True)
-    guitar = transcribe_stage.pick_guitar_source(stems, mix)
+    if guitar_only:
+        stems = timed("separate", lambda: separate.guitar_only(track), required=True)
+        guitar = transcribe_stage.GuitarSource(
+            path=stems / "guitar.wav", source="guitar-only", rms=1.0, mix_rms=1.0, ratio=1.0)
+    else:
+        # Required: a failed Demucs run must fail the job, not silently copy the mix into guitar.wav.
+        stems = timed("separate", lambda: separate.separate(track), required=True)
+        guitar = transcribe_stage.pick_guitar_source(stems, mix)
     guitar_path = guitar.path
     src_tag = guitar.cache_tag()
     sep_method = (separate.read_manifest(stems) or {}).get("method")
@@ -125,12 +133,13 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
                                                lambda: beats_stage.track_beats(mix)))
 
     progress("sections", 50)
-    struct = timed(
+    no_sections = {"bpm": beats.get("bpm", 0), "beats": beats.get("beats", []),
+                   "downbeats": beats.get("downbeats", []), "segments": []}
+    struct = no_sections if guitar_only else timed(
         "sections",
         lambda: cached_json(audio_hash, structure.MODEL_KEY, lambda: structure.analyze_structure(stems)),
         required=False,
-        default={"bpm": beats.get("bpm", 0), "beats": beats.get("beats", []),
-                 "downbeats": beats.get("downbeats", []), "segments": []},
+        default=no_sections,
     )
 
     progress("chords", 60)
@@ -272,6 +281,7 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "tab": {k: v for k, v in tab.items() if k != "musicxml"},
         "parts": parts_out,
         "raw_chords": raw_chords,
+        "input": "guitar" if guitar_only else "band",
         "guitar": {
             "source": guitar.source,
             "rms": round(float(guitar.rms), 5),

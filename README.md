@@ -183,6 +183,14 @@ kaçmış gitar mı diye bakılıyor (gerçek bas 75 Hz altında ses verir) ve k
 - Mac'te analiz daha hızlı: enstrüman ayırma grafik çipinde (Core ML) çalışıyor. 2,5 dakikalık bir şarkı
   95 saniye yerine yaklaşık 45 saniyede hazır. İlk analizde model bir kez dönüştürülür (~1 dk).
 
+## Sadece gitar kayıtları ve ürün sürümü (p2.9)
+
+- Şarkı eklerken "Kayıtta ne var?" sorusu: **Şarkı** (grup kaydı, gitar ayrılır) ya da **Sadece gitar**
+  (kendi çaldığın / tek gitar). Sadece gitarda ayırma ve bölüm modeli hiç çalışmaz: 20 saniyelik bir kayıt
+  ~6 saniyede hazır, doğruluk aynı (12 elektro soloda nota 0.69 → 0.68). Mikrofonla kayıtlar hep "sadece gitar".
+- `TABGEN_EDITION=product`: her kayıt "sadece gitar" sayılır, link ile indirme kapalıdır. Lisansı ticari
+  kullanıma uygun olmayan modeller (ayırma, bölümler) bu sürümde hiç çalışmaz — bkz. docs/LISANS_DENETIMI.md.
+
 ## Kendi şarkılarınla ölçüm
 
 TabGen'in senin şarkılarında ne kadar doğru olduğunu görmek için, güvendiğin bir tab'ı (Guitar Pro

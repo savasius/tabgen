@@ -115,6 +115,25 @@ def fallback_from_mix(track: Path, method: str = "eval") -> Path:
     return d
 
 
+GUITAR_ONLY_DIR = "guitar-only"
+
+
+def guitar_only_dir(track: Path) -> Path:
+    return track / "stems" / GUITAR_ONLY_DIR
+
+
+def guitar_only(track: Path) -> Path:
+    """The recording is the guitar (the player's own take): no separation model at all, the mix
+    is the guitar stem. Kept apart from Demucs stems so both analyses of one file can coexist."""
+    d = guitar_only_dir(track)
+    d.mkdir(parents=True, exist_ok=True)
+    g = d / "guitar.wav"
+    if not g.exists():
+        shutil.copyfile(track / "mix.wav", g)
+    write_manifest(d, "guitar-only", note="input is a guitar recording; no separation")
+    return d
+
+
 def separate(track: Path) -> Path:
     """Writes the 6 stems plus two derived mixes:
     - other4.wav   = guitar + piano + other (what All-In-One expects as its 'other' stem)
@@ -205,10 +224,13 @@ def resolve_playback(track: Path, stem: str) -> tuple[Path, str]:
             return mix, "audio/wav"
         raise FileNotFoundError("Mix audio missing")
     if kind in ("guitar", "gitar"):
-        # the guitar stem with its leaked low notes put back, when the analysis did that
+        # the guitar stem with its leaked low notes put back, when the analysis did that; for a
+        # guitar-only recording, the recording itself
         guitar = stems_dir(track) / "guitar_plus_bass.wav"
         if not guitar.exists():
             guitar = stems_dir(track) / "guitar.wav"
+        if not guitar.exists():
+            guitar = guitar_only_dir(track) / "guitar.wav"
         if guitar.exists():
             return guitar, "audio/wav"
         raise FileNotFoundError("Guitar stem not available — reanalyze this song")

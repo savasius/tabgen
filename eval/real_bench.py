@@ -239,7 +239,7 @@ def ref_downbeats(ref: dict, fn) -> np.ndarray:
     return np.array([fn(b) for b in bars]) if bars else np.array([])
 
 
-def evaluate_song(d: Path, reanalyze: bool) -> dict:
+def evaluate_song(d: Path, reanalyze: bool, input_override: str | None = None) -> dict:
     from tabgen_analysis import pipeline
     from tabgen_analysis.stages.decode import decode
     import mir_eval
@@ -248,17 +248,22 @@ def evaluate_song(d: Path, reanalyze: bool) -> dict:
     if not audio or not refp:
         raise SystemExit(f"{d.name}: needs audio.* and ref.* (see eval/real_bench.py)")
     meta = json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {}
+    if input_override:
+        meta["input"] = input_override
     ref = load_reference(refp)
     tracks = guitar_tracks(ref, meta.get("tracks"))
     if not tracks:
         raise SystemExit(f"{d.name}: no guitar tracks in {refp.name}; set meta.json tracks")
 
     audio_hash, _track = decode(audio)
-    a = pipeline.run(audio, meta={"title": meta.get("title") or d.name, "source": "eval"},
+    a = pipeline.run(audio, meta={"title": meta.get("title") or d.name, "source": "eval",
+                                  "input": meta.get("input") or "band"},
                      audio_hash=audio_hash, force=reanalyze)
     from tabgen_analysis.config import track_dir
     from tabgen_analysis.stages import separate
     guitar = separate.stems_dir(track_dir(audio_hash)) / "guitar.wav"
+    if meta.get("input") == "guitar":
+        guitar = separate.guitar_only_dir(track_dir(audio_hash)) / "guitar.wav"
 
     all_ref = sorted((n for t in tracks for n in t["notes"]), key=lambda n: n["start"])
     if meta.get("synced"):  # reference recorded with the audio (e.g. a MIDI pickup): no alignment
@@ -316,6 +321,7 @@ def main() -> None:
     ap.add_argument("--root", type=Path, default=REAL)
     ap.add_argument("--only", default="")
     ap.add_argument("--reanalyze", action="store_true")
+    ap.add_argument("--input", choices=("guitar", "band"), help="override meta.json input for every song")
     ap.add_argument("--out", type=Path, default=REAL / "results.json")
     args = ap.parse_args()
     songs = sorted(p for p in args.root.iterdir() if p.is_dir() and (not args.only or p.name in args.only.split(",")))
@@ -323,7 +329,7 @@ def main() -> None:
         raise SystemExit(f"no songs under {args.root} (see eval/real_bench.py docstring)")
     rows = []
     for d in songs:
-        r = evaluate_song(d, args.reanalyze)
+        r = evaluate_song(d, args.reanalyze, args.input)
         rows.append(r)
         print(json.dumps(r, ensure_ascii=False), flush=True)
     keys = ("note_f1", "tab_f1", "sf_acc", "part_tab_f1", "downbeat_f")

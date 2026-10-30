@@ -156,11 +156,15 @@ async function json<T>(res: Response): Promise<T> {
 
 export const api = {
   config: () => fetch(`${BASE}/v1/config`).then(json<{
+    edition?: string
+    guitar_only?: boolean
     url_ingest_enabled: boolean; device: string; pipeline_version?: string; audio_stems?: AudioStem[]
   }>),
-  upload: (file: File) => {
+  /** input: 'guitar' = the player's own guitar take (no separation), 'band' = a song */
+  upload: (file: File, input: 'guitar' | 'band' = 'band') => {
     const fd = new FormData()
     fd.append('file', file)
+    fd.append('input', input)
     return fetch(`${BASE}/v1/jobs/upload`, { method: 'POST', body: fd }).then(json<Job>)
   },
   fromUrl: (url: string) =>

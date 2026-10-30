@@ -135,6 +135,10 @@
 }
 
 @layer base {
+  /* native checkboxes, radios and sliders in the app's colour, not the system blue */
+  input[type="checkbox"], input[type="radio"], input[type="range"], progress {
+    accent-color: var(--primary);
+  }
   * {
     @apply border-border;
   }

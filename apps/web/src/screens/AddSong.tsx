@@ -28,9 +28,9 @@ export function AddSong() {
         }}
       >
         <TabsList className="w-full">
-          <TabsTrigger value="file"><Upload className="mr-1 size-4" /> {t('add.tabs.file')}</TabsTrigger>
-          <TabsTrigger value="youtube"><FileVideo className="mr-1 size-4" /> {t('add.tabs.youtube')}</TabsTrigger>
-          <TabsTrigger value="mic"><Mic className="mr-1 size-4" /> {t('add.tabs.mic')}</TabsTrigger>
+          <TabsTrigger value="file"><Upload className="mr-1 size-4" /> <span className="sm:hidden">{t('library.source.file')}</span><span className="hidden sm:inline">{t('add.tabs.file')}</span></TabsTrigger>
+          <TabsTrigger value="youtube"><FileVideo className="mr-1 size-4" /> <span className="sm:hidden">{t('library.source.youtube')}</span><span className="hidden sm:inline">{t('add.tabs.youtube')}</span></TabsTrigger>
+          <TabsTrigger value="mic"><Mic className="mr-1 size-4" /> <span className="sm:hidden">{t('library.source.mic')}</span><span className="hidden sm:inline">{t('add.tabs.mic')}</span></TabsTrigger>
         </TabsList>
         <TabsContent value="file" className="mt-5"><FilePanel /></TabsContent>
         <TabsContent value="youtube" className="mt-5"><YoutubePanel /></TabsContent>
@@ -55,7 +55,10 @@ function FilePanel() {
   const [over, setOver] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [kind, setKind] = useState<'guitar' | 'band'>('band')
+  const [guitarOnly, setGuitarOnly] = useState(false) // product build: every upload is a guitar take
   const input = useRef<HTMLInputElement>(null)
+  useEffect(() => { api.config().then((c) => setGuitarOnly(!!c.guitar_only)).catch(() => {}) }, [])
 
   const pick = (f: File) => {
     setFile(f)
@@ -68,7 +71,7 @@ function FilePanel() {
     setBusy(true)
     setErr(null)
     try {
-      const job = await api.upload(file)
+      const job = await api.upload(file, guitarOnly ? 'guitar' : kind)
       goJob(nav, job.id, title || file.name, 'file')
     } catch (e) {
       setErr(t('add.file.error', { m: (e as Error).message }))
@@ -109,6 +112,21 @@ function FilePanel() {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label={t('add.meta.title')} />
               <Input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder={t('add.meta.artist')} />
+            </div>
+          </div>
+        )}
+        {!guitarOnly && (
+          <div className="flex flex-col gap-2" data-testid="input-kind">
+            <p className="text-sm font-medium">{t('add.kind.title')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['band', 'guitar'] as const).map((k) => (
+                <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k}
+                  className={cn('rounded-xl border p-3 text-left transition-colors',
+                    kind === k ? 'border-primary bg-primary/10' : 'border-border hover:bg-accent/40')}>
+                  <p className="text-sm font-medium">{t(`add.kind.${k}`)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t(`add.kind.${k}Hint`)}</p>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -250,7 +268,7 @@ function MicPanel() {
     const ext = await recordingExt(blob)
     const file = new File([blob], `mic-${Date.now()}.${ext}`, { type: blob.type })
     try {
-      const job = await api.upload(file)
+      const job = await api.upload(file, 'guitar') // a take recorded here is the player's guitar
       goJob(nav, job.id, t('add.tabs.mic'), 'mic')
     } catch (e) {
       setErr((e as Error).message)

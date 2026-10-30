@@ -278,7 +278,7 @@ export function PlayAlong() {
       ) : (
         <Button variant="glow" size="lg" onClick={start} data-testid="play-start"><Mic className="size-4" /> {t('play.start')}</Button>
       )}
-      {micErr && <p className="text-xs text-destructive">{micErr}</p>}
+      {micErr && <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{micErr}</p>}
 
       <div className="sticky bottom-3 z-20">
         <Transport
