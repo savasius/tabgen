@@ -289,6 +289,7 @@ export const en: Dict = {
     soundTabHint: "Play the extracted tab as a digital guitar — same time axis.",
   },
   tab: {
+    showChords: "Chords",
     title: "Guitar tab",
     how: "Six lines = six strings (top line is the thinnest). Big numbers = the fret to press.",
     uncertain: "Uncertain note",

@@ -300,6 +300,7 @@ export const tr = {
     soundTabHint: "Çıkarılan tab'ı dijital gitar olarak çal — aynı zaman çizgisi.",
   },
   tab: {
+    showChords: "Akorlar",
     title: "Gitar tab'ı",
     how: "Altı çizgi = altı tel (en üstteki en ince tel). Büyük sayılar = basacağın perde.",
     uncertain: "Belirsiz nota",

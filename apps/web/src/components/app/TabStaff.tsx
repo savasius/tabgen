@@ -33,6 +33,7 @@ function Staff({
   analysis,
   onAdd,
   sectionLabels,
+  chordMarks,
 }: {
   bars: number[]
   notes: StaffNote[]
@@ -49,6 +50,7 @@ function Staff({
   /** double-click on an empty spot: bar, 16th position in the bar, display string (1 = high e) */
   onAdd?: (bar: number, pos: number, string: number) => void
   sectionLabels?: string[]
+  chordMarks?: Map<number, { pos: number; name: string }[]>
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const barW = 300 * zoom
@@ -137,6 +139,14 @@ function Staff({
                 <text x={x0 + 8} y={20} fill="var(--muted-foreground)" fontSize="11" fontFamily="var(--font-mono)">
                   {b + 1}
                 </text>
+                {(chordMarks?.get(b) ?? [])
+                  .filter((c, k) => k > 0 || c.pos > 0 || i === 0 || (chordMarks?.get(bars[i - 1]) ?? []).at(-1)?.name !== c.name)
+                  .map((c) => (
+                    <text key={c.pos} x={x0 + 18 + (c.pos * 4 / steps) * (barW - 36)} y={40}
+                      fill="var(--foreground)" fontSize="13" fontWeight="700" fontFamily="var(--font-sans)">
+                      {c.name}
+                    </text>
+                  ))}
                 {showSec ? (
                   <text x={x0 + 28} y={20} fill="var(--primary)" fontSize="11" fontWeight="700" fontFamily="var(--font-sans)">
                     {label}
@@ -356,6 +366,7 @@ export function TabStaff({
   autoScroll,
   onAdd,
   sectionLabels,
+  chordMarks,
 }: {
   analysis: Analysis
   notes: StaffNote[]
@@ -371,6 +382,8 @@ export function TabStaff({
   onAdd?: (bar: number, pos: number, string: number) => void
   /** translated section names; omitted when the song has no real sections */
   sectionLabels?: string[]
+  /** chord names to print above the staff, per bar: where the chord changes (pos = beat in bar) */
+  chordMarks?: Map<number, { pos: number; name: string }[]>
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [perRow, setPerRow] = useState(4)
@@ -416,6 +429,7 @@ export function TabStaff({
           analysis={analysis}
           onAdd={onAdd}
           sectionLabels={sectionLabels}
+          chordMarks={chordMarks}
         />
       ))}
     </div>

@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { Switch } from '@/components/ui/switch'
 import { useApp, type TKey } from '@/lib/store'
-import { sectionNames } from '@/lib/display'
+import { sectionNames, shownChord } from '@/lib/display'
+import { ChordStrip } from '@/components/app/ChordStrip'
 import { beatsPerBar, locatePlayhead, notesAt, staffNotes, timeToTick, type StaffNote } from '@/lib/time'
 import { addNote, deleteNote, moveString, setFret, toggleTechnique } from '@/lib/tab-edit'
-import { useSong } from './song-session'
+import { soundingSpelling, useSong } from './song-session'
 
 const LEGEND_GLYPH: Record<string, string> = {
   bend: 'b', slide: 'sl', hammer: 'h', pull: 'p', vibrato: 'v', palmMute: 'pm',
@@ -34,6 +35,46 @@ export function TabView() {
   const [zoom, setZoom] = useState(1)
   const [view, setView] = useState<'tab' | 'both' | 'fretboard'>('tab')
   const [advanced, setAdvanced] = useState(false)
+  // chord names over the tab + the song's chord diagrams; remembered per device
+  const [showChords, setShowChords] = useState(() => {
+    try { return localStorage.getItem('tabgen.tabChords') !== '0' } catch { return true }
+  })
+  const toggleChords = (v: boolean) => {
+    setShowChords(v)
+    try { localStorage.setItem('tabgen.tabChords', v ? '1' : '0') } catch { /* private mode */ }
+  }
+  const spelling = soundingSpelling(a, s.transpose, s.capo)
+  const chordOpts = { level: s.level, transpose: s.transpose, capo: s.capo }
+  const chordMarks = useMemo(() => {
+    const m = new Map<number, { pos: number; name: string }[]>()
+    let prev = ''
+    for (const g of a.grid) {
+      const label = g.chord && g.chord !== 'N' && g.chord !== 'X' ? g.chord : ''
+      const name = label ? shownChord(label, chordOpts, spelling, settings.notation).name : ''
+      const list = m.get(g.bar) ?? []
+      // every bar keeps its opening chord (shown at a row start); inside a bar, only changes
+      if (name && (g.pos === 0 || name !== prev)) list.push({ pos: g.pos, name })
+      if (list.length) m.set(g.bar, list)
+      prev = name
+    }
+    return m
+  }, [a.grid, s.level, s.transpose, s.capo, spelling, settings.notation])
+  const stripChords = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { key: string; name: string; chord: ReturnType<typeof shownChord>['chord'] }[] = []
+    for (const c of a.chords) {
+      if (c.label === 'N' || c.label === 'X') continue
+      const d = shownChord(c.label, chordOpts, spelling, settings.notation)
+      if (seen.has(d.name)) continue
+      seen.add(d.name)
+      out.push({ key: d.name, name: d.name, chord: d.chord })
+    }
+    return out
+  }, [a.chords, s.level, s.transpose, s.capo, spelling, settings.notation])
+  const nowChord = useMemo(() => {
+    const c = a.chords.find((x) => s.time >= x.start && s.time < x.end)
+    return c && c.label !== 'N' ? shownChord(c.label, chordOpts, spelling, settings.notation).name : undefined
+  }, [a.chords, s.time, s.level, s.transpose, s.capo, spelling, settings.notation])
   const host = useRef<HTMLDivElement>(null)
   const apiRef = useRef<{ destroy(): void; tickPosition: number } | null>(null)
   const [tabErr, setTabErr] = useState<string | null>(null)
@@ -215,6 +256,10 @@ export function TabView() {
             <Switch checked={advanced} onCheckedChange={setAdvanced} />
             {t('tab.advanced')}
           </label>
+          <label className="flex items-center gap-2 text-sm" data-testid="chords-toggle">
+            <Switch checked={showChords} onCheckedChange={toggleChords} />
+            {t('tab.showChords')}
+          </label>
           <label className="flex items-center gap-2 text-sm" data-testid="edit-toggle">
             <Switch checked={editing} onCheckedChange={(v) => { setEditing(v); if (!v) setSelIdx(null) }} />
             {t('tab.edit.toggle')}
@@ -224,6 +269,8 @@ export function TabView() {
           {t('tab.glyphs')}
         </p>
       </div>
+
+      {showChords && <ChordStrip chords={stripChords} current={nowChord} lefty={settings.lefty} />}
 
       {(view === 'tab' || view === 'both') && (
         <TabStaff
@@ -242,6 +289,7 @@ export function TabView() {
           zoom={zoom}
           emptyHint={t('tab.sectionChords')}
           sectionLabels={a.sections.length > 1 ? sectionNames(a.sections, t, true) : undefined}
+          chordMarks={showChords ? chordMarks : undefined}
           autoScroll={s.autoScroll && !editing}
           onAdd={editing ? edit.add : undefined}
         />
