@@ -63,6 +63,8 @@ pip install -q --no-deps nnAudio==0.3.3
 # basic-pitch's Linux extra wants TensorFlow; we use the bundled ONNX model instead.
 pip install -q --no-deps basic-pitch==0.4.0
 pip install -q mir_eval 'resampy>=0.2.2,<0.4.3'
+# macOS: Demucs on the Apple GPU through Core ML (~8x faster separation; converted on first use)
+[[ "$(uname)" == "Darwin" ]] && pip install -q 'coremltools>=8'
 
 say "Downloading model weights (one time, ~1 GB)"
 python -m tabgen_analysis.prefetch

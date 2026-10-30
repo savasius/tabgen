@@ -283,6 +283,13 @@ Guitar-TECHS single-note sets and was too noisy on amped tone to use yet (`eval/
 50 -> 94, 58 -> 176/88); a felt-tempo rule overfit before, so the BPM badge now offers x2 / /2
 (edits.json `tempo_factor`, reanalysis from cached stems). gt-04 with /2: 107.1 -> 53.5 BPM.
 
+**Speed (p2.8).** Demucs can't use the Mac GPU through PyTorch (MPS conv limit), so separation ran
+on the CPU. `tabgen_analysis/coreml_demucs.py` converts the network between STFT and iSTFT to a Core
+ML program once (fp32) and runs it on the GPU; STFT, masking and Demucs' overlap-add stay in PyTorch.
+2:22 song on an M1 Pro: separation 52.6 s -> 14.9 s, whole analysis 95 s -> 58 s. The 12 P3 solos
+analyzed from scratch this way score the same (note F1 0.688 -> 0.686, tab F1 0.391 -> 0.395: run-to-
+run noise; two CPU runs differ as much). Next slowest: All-In-One sections, 24 s.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch
