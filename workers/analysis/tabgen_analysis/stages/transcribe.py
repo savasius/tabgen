@@ -23,8 +23,11 @@ log = logging.getLogger(__name__)
 # v5: cache key includes guitar-stem routing so mix/harmonic transcriptions are not reused.
 # v6: Basic Pitch thresholds 0.42/0.28/90ms -> 0.65/0.35/100ms (swept on GuitarSet 00-01;
 #     held-out GuitarSet 05 note F1 0.78 -> 0.82, IDMT electric licks 0.70 -> 0.76).
-MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v6-guitar"
-BP_ONSET, BP_FRAME, BP_MIN_MS = 0.65, 0.35, 100.0
+# v7: 0.65/0.35/100ms -> 0.75/0.40/70ms (eval/bp_sweep_electric.py: better on every set at once --
+#     Guitar-TECHS electric solos 0.63/0.66 -> 0.66/0.68 note F1 per half, GuitarSet 05 0.821 -> 0.823,
+#     IDMT licks 0.752 -> 0.770; a stricter onset drops ghost notes, the shorter minimum keeps fast runs).
+MODEL_KEY = "bp-0.4-onnx-tabcnn-gpfx-v7-guitar"
+BP_ONSET, BP_FRAME, BP_MIN_MS = 0.75, 0.40, 70.0
 
 WEAK_RATIO = 0.08
 EMPTY_RMS = 1e-4

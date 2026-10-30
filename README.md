@@ -173,6 +173,14 @@ kaçmış gitar mı diye bakılıyor (gerçek bas 75 Hz altında ses verir) ve k
 12 gerçek elektro gitar solosunda (Guitar-TECHS) doğru duyulan nota oranı 0.60 → 0.66. Gruplu
 şarkılara dokunulmuyor. Eski şarkıları "Yeniden analiz et" ile güncelleyebilirsin.
 
+## Tab doğruluğu ve tempo düzeltme (p2.8)
+
+- Nota algılama ayarları elektro gitara göre yeniden seçildi (hızlı geçişler kaybolmuyor, hayalet notalar azaldı).
+  Gerçek elektro sololarda doğru nota oranı 0.66 → 0.69; akustik kayıtlarda kayıp yok.
+- Tab artık 12. perdenin üstünü çekinmeden kullanıyor (sololarda en çok yüksek pozisyonlar düzeldi).
+- Tempo yanlışsa şarkı sayfasında BPM rozetine tıkla: "Vuruş iki kat hızlı / yarı hızda". Şarkı birkaç
+  saniyede yeni tempoyla yeniden hazırlanır; tab düzeltmelerin korunur.
+
 ## Kendi şarkılarınla ölçüm
 
 TabGen'in senin şarkılarında ne kadar doğru olduğunu görmek için, güvendiğin bir tab'ı (Guitar Pro

@@ -325,7 +325,8 @@ class FingeringParams:
     # Defaults fitted by eval/fingering_fit.py on GuitarSet 00-04 + IDMT Aria/Strat licks;
     # checked on held-out GuitarSet 05 and IDMT Les Paul licks.
     fret: float = 0.02          # barely any pull toward the nut: mid-neck is normal
-    high: float = 0.6           # per fret above 12
+    high: float = 0.1           # per fret above 12 (was 0.6: electric soloists do play up there --
+                                #   Guitar-TECHS solos 0.51 -> 0.53 oracle, GuitarSet/IDMT unchanged)
     open_bonus: float = -0.6    # players fret a note more often than they use the open string
     span: float = 0.5           # per fret of grip span (beyond MAX_SPAN: +12 per fret)
     pos: float = 0.3            # hand shift per fret between consecutive grips

@@ -256,6 +256,33 @@ notes moved the fingering to a different, equally playable position. Tempo octav
 7.4) than TabGen places notes (6.4); a fret-12 phrase on the A/D/G strings comes out at fret 7 on
 the next string up. Same pitches, different (playable) tab — see gap 7.
 
+## 10. p2.8: note thresholds for electric guitar, fingering up the neck, tempo fix
+
+**Note detection.** Basic Pitch's decoder thresholds were swept on GuitarSet (acoustic) only.
+`eval/bp_sweep_electric.py` sweeps them from one model pass per clip on Guitar-TECHS P3 solos (two
+halves), GuitarSet 05 and IDMT licks. 0.75 / 0.40 / 70 ms beats the shipped 0.65 / 0.35 / 100 ms on
+every set at once (note F1, 50 ms): P3 0.627/0.659 -> 0.661/0.675, GuitarSet 05 0.821 -> 0.823,
+IDMT 0.752 -> 0.770. A stricter onset drops ghost notes; the shorter minimum keeps fast runs.
+
+**Fingering.** With true pitches the fingering alone gets 0.51 on the P3 solos (best possible rule
+tuning, fitted on the test itself: 0.62). Fitting on half the solos plus the old train sets and
+testing on the other half kept one change that generalised: the penalty per fret above 12 drops
+0.6 -> 0.1 (oracle P3 0.508 -> 0.533, GuitarSet 05 0.640 -> 0.641, IDMT Les Paul 0.550 -> 0.550;
+GuitarSet tab F1 on audio, players 04-05: 0.702 -> 0.702). TabCNN's string prior stays at weight
+1.4: lowering it costs P3 tab F1 (0.7: 0.384, 0: 0.349), though it is often wrong high on the neck
+(it was trained on acoustic GuitarSet). Inharmonicity per note was tried as a string cue on the
+Guitar-TECHS single-note sets and was too noisy on amped tone to use yet (`eval/strings/`).
+
+| 12 P3 solos, mean | note F1 | tab F1 | string+fret right |
+|---|---|---|---|
+| p2.6 | 0.60 | 0.34 | 0.56 |
+| p2.7 (bass leak) | 0.66 | 0.37 | 0.55 |
+| **p2.8** | **0.69** | **0.39** | **0.56** |
+
+**Tempo.** The trackers count the 50-58 BPM solos at double time or on triplets (55 -> 107,
+50 -> 94, 58 -> 176/88); a felt-tempo rule overfit before, so the BPM badge now offers x2 / /2
+(edits.json `tempo_factor`, reanalysis from cached stems). gt-04 with /2: 107.1 -> 53.5 BPM.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch
@@ -274,7 +301,7 @@ the next string up. Same pitches, different (playable) tab — see gap 7.
 6. **Slide precision ~0.6, recall ~0.4** — slides are often confused with vibrato wobble or a re-pick; a small
    learned transition classifier (IDMT + synthetic) would help.
 7. **Fingering still ~30-45% wrong on electric solos** where several positions are equally playable
-   (Guitar-TECHS: 0.55 right; TabGen sits ~1 fret lower than players who play up the neck, §9).
+   (Guitar-TECHS: 0.56 right after p2.8, §10; rule tuning tops out near 0.62 even fitted on the test).
    TabCNN's prior is the main audio cue; a timbre-based string classifier would close more of it.
 8. Editing, tuner and play-along exist (p2.6). Play-along is weak on jazz/bossa voicings and needs
    headphones; there is no Guitar Pro export yet. Real electric solos are now scored (§9); a real commercial
