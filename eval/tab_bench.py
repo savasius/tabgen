@@ -270,6 +270,11 @@ def fingered_from(raw: dict, beats: list[float], audio: Path | None, cleaner: st
         notes = techniques.merge_split_bends(notes, a)
         if hasattr(techniques, "resolve_continuations"):
             notes = techniques.resolve_continuations(notes)
+        # the string model, as the tab stage uses it (stages/tabs.py)
+        from tabgen_analysis import string_model
+        if audio is not None:
+            for i, p in string_model.string_probs(Path(audio), notes).items():
+                notes[i] = {**notes[i], "string_probs": p}
         placed = fingering.assign_notes_v2(notes, tuning=list(STANDARD_TUNING))
     else:
         placed = fingering.assign_notes(notes, tuning=list(STANDARD_TUNING))

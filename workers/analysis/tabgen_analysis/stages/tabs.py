@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from .. import fingering, tab_export, techniques
+from .. import fingering, string_model, tab_export, techniques
 from ..fingering import chord_pitch_classes, detect_tuning, tuning_names
 
 log = logging.getLogger(__name__)
@@ -130,6 +130,13 @@ def build_tab(
     # Basic Pitch writes one bent note as two; fold them before fingering so the tab shows
     # "7b9" on one string instead of a fake hammer-on to fret 9 (or 8 on another string).
     notes_in = techniques.resolve_continuations(techniques.merge_split_bends(notes_in, audio))
+    # which string, from how each note sounds (string_model.py); the Viterbi weighs it in
+    if guitar_path is not None:
+        try:
+            for i, p in string_model.string_probs(Path(guitar_path), notes_in).items():
+                notes_in[i] = {**notes_in[i], "string_probs": p}
+        except Exception as e:  # noqa: BLE001 -- the tab still works from pitch and TabCNN alone
+            log.warning("string model failed: %s", e)
     assigned = fingering.assign_notes_v2(
         notes_in, tuning=tuning, capo=capo,
         chord_at=chord_at, hint_weight_at=_hint_weight_factory(sections),

@@ -295,6 +295,30 @@ song), and ~3 s reloading the 8-model ensemble, now kept loaded by the server. S
 whole analysis of the 2:22 song 95 -> 45 s. onnxruntime telemetry is switched off: its shutdown flush
 could spin a core after the analysis had finished.
 
+## 11. p3.0: a string model of our own
+
+The fingering's audio cue was TabCNN, trained on acoustic GuitarSet only; on electric solos it was
+often wrong high on the neck. `tabgen_analysis/string_model.py` is a small CNN (1.1 MB) that looks at
+a note's first ~200 ms as a constant-Q patch aligned to the note's own pitch (overtone shape, not
+pitch) and outputs a probability per string. Trained on the Mac GPU (`eval/strings/train.py`, 25
+epochs, minutes) on CC BY data only: Guitar-TECHS players 1-2 (single notes, chords, scales,
+techniques; amp mic + DI) and GuitarSet players 00-04, 85k notes. Tested on notes it never saw.
+
+| per-note string accuracy, true pitch | most common string | string model |
+|---|---|---|
+| Guitar-TECHS P3 solos | 0.40 | 0.58 |
+| GuitarSet 05 | 0.67 | 0.89 |
+
+In the fingering Viterbi (weight 2.0, picked on IDMT licks -- not in its training data), true pitches:
+IDMT 0.55 -> 0.68, P3 0.53 -> 0.59, GuitarSet 05 0.64 -> 0.92. Full pipeline from audio:
+
+| | tab F1 | string+fret right (heard notes) |
+|---|---|---|
+| P3 solos, p2.9 -> p3.0 | 0.391 -> **0.412** | 0.562 -> 0.594 |
+| GuitarSet 05, p2.9 -> p3.0 | 0.700 -> **0.741** | 0.859 -> 0.909 |
+
+Note detection is unchanged (the model only picks strings); missed notes remain the main gap.
+
 ## 6. Remaining gaps, ranked by impact
 
 1. **Note transcription on distorted chords** (note F1 ≈ 0.53 on distorted comping). Basic Pitch

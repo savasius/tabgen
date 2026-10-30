@@ -18,13 +18,15 @@ TabGen is currently a **free, personal-use** tool. Before any public release, re
 | [SVGuitar](https://github.com/omnibrain/svguitar) | chord diagram rendering | MIT | — | low |
 | [Basic Pitch](https://github.com/spotify/basic-pitch) (Spotify) | guitar note events + pitch contours | Apache-2.0 | Apache-2.0 (ICASSP 2022 ONNX in the wheel) | low |
 | [TabCNN-GPFX](https://huggingface.co/cstr/tabcnn-onnx) ONNX | optional string/fret prior | CC BY 4.0 | CC BY 4.0 (GuitarSet + Pedroza et al. DAFx-24; cite both) | low (attribution) |
+| TabGen string model (`tabgen_analysis/weights/string-net-v1.pt`) | which string a note is on | MIT (ours) | trained by eval/strings/train.py on GuitarSet players 00-04 and Guitar-TECHS players 1-2, both CC BY 4.0 | low (attribution: GuitarSet, Guitar-TECHS) |
 | [onnxruntime](https://onnxruntime.ai) | Basic Pitch + TabCNN inference | MIT | — | low |
 
 ### Evaluation data (not shipped, not redistributed — downloaded into `data/eval/` by hand)
 
 | Dataset | Used for | License | Risk |
 |---|---|---|---|
-| [GuitarSet](https://zenodo.org/records/3371780) (Xi et al. 2018) | note / string+fret ground truth (`eval/tab_bench.py`), fingering fit | CC BY 4.0 | low (cite) |
+| [GuitarSet](https://zenodo.org/records/3371780) (Xi et al. 2018) | note / string+fret ground truth (`eval/tab_bench.py`), fingering fit, string-model training (players 00-04) | CC BY 4.0 | low (cite) |
+| [Guitar-TECHS](https://zenodo.org/records/14963133) (Pedroza et al. 2025) | electric solos as a test set (player 3), string-model training (players 1-2) | CC BY 4.0 | low (cite) |
 | [IDMT-SMT-Guitar v2](https://zenodo.org/records/7544110) (Kehling et al. 2014) | bend / slide / vibrato + electric-guitar tab check (`eval/technique_bench.py`), fingering fit | CC BY-NC-ND 4.0 | eval only; fitted weights are a handful of numbers, no audio or labels are redistributed |
 | [pretty-midi](https://github.com/craffel/pretty-midi) | MIDI helper | MIT | — | low |
 | [alphaTab](https://alphatab.net) (`@coderline/alphatab`) | tab render + cursor | **MPL-2.0** | — | visible attribution required; modified MPL files must stay open |

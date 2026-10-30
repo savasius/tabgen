@@ -18,6 +18,10 @@ export const CREDITS: Credit[] = [
     name: 'TabCNN-GPFX', role: 'strings', license: 'CC BY 4.0', url: 'https://huggingface.co/cstr/tabcnn-onnx',
     notice: 'Trained on GuitarSet (Xi et al., 2018) and the guitar-FX data of Pedroza et al. (DAFx-24).',
   },
+  {
+    name: 'TabGen string model', role: 'strings', license: 'own model; training data CC BY 4.0', url: 'https://github.com/savasius/tabgen',
+    notice: 'Trained on GuitarSet (Xi et al., 2018) and Guitar-TECHS (Pedroza et al., 2025).',
+  },
   { name: 'Beat This!', role: 'beats', license: 'MIT', url: 'https://github.com/CPJKU/beat_this', notice: 'Foscarin, Schlüter & Widmer, ISMIR 2024' },
   { name: 'All-In-One', role: 'sections', license: 'MIT', url: 'https://github.com/mir-aidj/all-in-one', notice: 'Kim & Nam, WASPAA 2023' },
   { name: 'lv-chordia', role: 'chords', license: 'MIT', url: 'https://github.com/openmirlab/lv-chordia', notice: 'Jiang, Chen, Li & Xia, ISMIR 2019' },

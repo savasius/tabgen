@@ -334,6 +334,8 @@ class FingeringParams:
     rest_decay: float = 0.2     # seconds: a rest this long halves the shift cost
     hint: float = 0.0           # chord-tone hint weight (scaled by hint_weight_at)
     tabcnn: float = 1.4         # bonus for matching TabCNN's string+fret prior
+    strnet: float = 2.0         # bonus x the string model's probability for the chosen string (string_model.py);
+                                #   picked on IDMT licks: oracle 0.55 -> 0.68, P3 solos 0.53 -> 0.59, GuitarSet 05 0.64 -> 0.92
     legato: float = 3.0         # same-string bonus for a weak-attack (hammer/slide) destination
     top_k: int = 48             # grips kept per onset group
     extra: dict = field(default_factory=dict)
@@ -370,6 +372,9 @@ def _emission(opt, midis, notes, pcs, hw, p: FingeringParams) -> float:
         h = n.get("tabcnn")
         if h and h.get("string") == s and h.get("fret") == f:
             c -= p.tabcnn * float(h.get("confidence") or 0.5)
+        sp = n.get("string_probs")
+        if sp and p.strnet:
+            c -= p.strnet * float(sp[s])
     return c
 
 

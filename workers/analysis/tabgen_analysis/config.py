@@ -6,7 +6,7 @@ import torch
 # p2.3: chords + key + tabs always on the isolated guitar stem (never mix / harmonic).
 # p2.4: global Viterbi fingering, split-bend merge, stricter legato, export keeps every onset,
 #       per-bar tempo in alphaTex (tab synth follows the recording).
-PIPELINE_VERSION = "p2.9-key2-bp7-fing3-basslk1-tempo2-parts1-tabv3-guitarstem-bt1.1-aio3.1-lvc1.1-bp-tabcnn"
+PIPELINE_VERSION = "p3.0-strnet1-key2-bp7-fing3-basslk1-tempo2-parts1-tabv3-guitarstem-bt1.1-aio3.1-lvc1.1-bp-tabcnn"
 
 # Product build: every input is treated as a guitar recording (no separation / section models,
 # whose weights aren't licensed for commercial use -- docs/LISANS_DENETIMI.md).
