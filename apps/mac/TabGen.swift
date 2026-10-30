@@ -13,6 +13,8 @@ import AVFoundation
 
 let serverURL = URL(string: Bundle.main.object(forInfoDictionaryKey: "TabGenURL") as? String ?? "http://127.0.0.1:8000")!
 let agentLabel = "com.tabgen.server"
+let toneTest = CommandLine.arguments.contains("--tone-selftest")
+var tonePhase = 0.0
 let repoRoot = Bundle.main.object(forInfoDictionaryKey: "TabGenRoot") as? String ?? ""
 let agentInstalled = FileManager.default.fileExists(
     atPath: NSHomeDirectory() + "/Library/LaunchAgents/\(agentLabel).plist")
@@ -281,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         status.isHidden = true
         web.isHidden = false
-        if CommandLine.arguments.contains("--mic-selftest") { micSelfTest() }
+        if CommandLine.arguments.contains("--mic-selftest") || toneTest { micSelfTest() }
     }
 
     /// `open TabGen.app --args --mic-selftest`: record 3 s from the microphone inside the page the
@@ -292,11 +294,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         const ctx = new AudioContext(); const before = ctx.state; await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 1000))])
         const an = ctx.createAnalyser(); ctx.createMediaStreamSource(s).connect(an)
         const mr = new MediaRecorder(s); let bytes = 0; mr.ondataavailable = (e) => { bytes += e.data.size }; mr.start(500)
-        const buf = new Float32Array(2048); let peak = 0; const t0 = performance.now()
-        while (performance.now() - t0 < 3000) { an.getFloatTimeDomainData(buf); for (const v of buf) peak = Math.max(peak, Math.abs(v)); await new Promise((r) => setTimeout(r, 100)) }
+        an.fftSize = 4096
+        const buf = new Float32Array(4096); let peak = 0; const t0 = performance.now(); const hz = []; let silent = 0, gaps = 0, n = 0
+        while (performance.now() - t0 < 3000) {
+          an.getFloatTimeDomainData(buf); n++
+          let e = 0; for (const v of buf) { peak = Math.max(peak, Math.abs(v)); e += v * v }
+          if (Math.sqrt(e / buf.length) < 0.005) silent++
+          let run = 0; for (const v of buf) { run = Math.abs(v) < 1e-6 ? run + 1 : 0; if (run === 64) gaps++ }
+          let best = 0, lag = 0; for (let L = 40; L < 800; L++) { let c = 0; for (let i = 0; i + L < 2048; i++) c += buf[i] * buf[i + L]; if (c > best) { best = c; lag = L } }
+          if (lag) hz.push(ctx.sampleRate / lag)
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        hz.sort((a, b) => a - b)
         const stopped = new Promise((r) => { mr.onstop = r }); mr.stop(); await stopped
         s.getTracks().forEach((t) => t.stop())
-        return JSON.stringify({ ctxBefore: before, ctxAfter: ctx.state, peak, recordedBytes: bytes, type: mr.mimeType })
+        return JSON.stringify({ ctxBefore: before, ctxAfter: ctx.state, peak, recordedBytes: bytes, type: mr.mimeType,
+          snapshots: n, silent, dropouts: gaps, medianHz: hz[hz.length >> 1], minHz: hz[0], maxHz: hz[hz.length - 1] })
         """
         web.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
             switch r {
@@ -444,6 +457,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             var mono = [Float](repeating: 0, count: n)
             let chans = Int(buf.format.channelCount)
             for c in 0..<chans { for i in 0..<n { mono[i] += ch[c][i] / Float(chans) } }
+            if toneTest { // --tone-selftest: a steady 110 Hz (open A) instead of the room
+                let sr = buf.format.sampleRate
+                for i in 0..<n { mono[i] = 0.3 * Float(sin(tonePhase)); tonePhase += 2 * .pi * 110 / sr }
+                tonePhase = tonePhase.truncatingRemainder(dividingBy: 2 * .pi)
+            }
             let b64 = mono.withUnsafeBufferPointer { Data(buffer: $0) }.base64EncodedString()
             DispatchQueue.main.async { self?.web.evaluateJavaScript("__tabgenMic.push('\(b64)')") }
         }
