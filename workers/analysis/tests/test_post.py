@@ -90,3 +90,16 @@ def test_dense_guitar_keeps_the_fast_grid():
     assert choose_beat_grid(bt, aio, n_notes=500, duration=72.0)[1] == "beat_this"
     # 2 notes per half-time beat: felt half time, as in I'm Yours (76 not 152)
     assert choose_beat_grid(bt, aio, n_notes=200, duration=72.0)[1] == "allin1"
+
+
+def test_scale_tempo_double_and_half():
+    from tabgen_analysis.stages.post import scale_tempo
+    beats = [i * 1.0 for i in range(16)]  # 60 BPM, 4/4, downbeats every 4 beats
+    g = {"beats": beats, "downbeats": beats[0::4], "bpm": 60.0}
+    d = scale_tempo(g, 2, duration=16.5)
+    assert d["bpm"] == 120.0 and len(d["beats"]) == 32
+    assert d["downbeats"][:3] == [0.0, 2.0, 4.0]  # every old bar split in two
+    h = scale_tempo(g, 0.5, duration=16.5)
+    assert h["bpm"] == 30.0 and h["beats"][:3] == [0.0, 2.0, 4.0]
+    assert h["downbeats"] == [0.0, 8.0]  # two old bars become one
+    assert scale_tempo(g, 3) is g

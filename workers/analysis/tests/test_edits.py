@@ -72,3 +72,15 @@ def test_part_edits_only_touch_that_part(data_dir):
     out = edits.apply(a)
     assert out["tab"]["notes"][0]["fret"] == 3
     assert out["parts"][0]["tab"]["notes"][0]["fret"] == 1 and out["parts"][0]["tab"]["edited"]
+
+
+def test_tempo_factor_is_saved_and_clears_chord_fixes(tmp_path, monkeypatch):
+    from tabgen_analysis import config, edits
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(edits, "track_dir", lambda h: tmp_path / h)
+    (tmp_path / "abc").mkdir()
+    edits._save("abc", {"chords": {"all": {"3": "A:min"}}})
+    edits.set_tempo("abc", 0.5)
+    assert edits.load("abc") == {**edits.load("abc"), "tempo_factor": 0.5} and "chords" not in edits.load("abc")
+    edits.set_tempo("abc", None)
+    assert edits.load("abc") == {}

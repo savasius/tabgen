@@ -125,6 +125,13 @@ export const en: Dict = {
     failedTitle: "We couldn't prepare this song",
   },
   song: {
+    tempoFix: {
+      title: "Wrong tempo?",
+      double: "The beat is twice as fast ({n} BPM)",
+      half: "The beat is half as fast ({n} BPM)",
+      auto: "Back to automatic tempo",
+      dropsChords: "Changing the tempo resets your chord fixes (tab fixes stay). Continue?",
+    },
     tabs: { chords: "Chords", tab: "Tab", play: "Play along" },
     key: "Key",
     tempo: "Tempo",

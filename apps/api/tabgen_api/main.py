@@ -151,6 +151,21 @@ def get_analysis(analysis_id: str):
     return data
 
 
+class _Tempo(BaseModel):
+    factor: float | None = None  # 2 = twice as fast as detected, 0.5 = half, None = automatic
+
+
+@app.put("/v1/analyses/{analysis_id}/edits/tempo")
+def set_tempo(analysis_id: str, body: _Tempo):
+    """Correct the tempo octave; the song is reanalyzed from its cached stems (a job)."""
+    _analysis_file(analysis_id)  # 404 if unknown
+    try:
+        edits.set_tempo(analysis_id, body.factor)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return jobs.submit_reanalyze(analysis_id).to_dict()
+
+
 @app.post("/v1/analyses/{analysis_id}/reanalyze")
 def reanalyze(analysis_id: str):
     if not analysis_id.isalnum():

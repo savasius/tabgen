@@ -85,7 +85,7 @@ export interface Analysis {
     youtube_offset?: number | null
   }
   duration: number
-  tempo: { bpm: number; bpm_allin1?: number; time_signature: string; beat_source?: string; tempo_folded?: string | null }
+  tempo: { bpm: number; bpm_allin1?: number; time_signature: string; beat_source?: string; tempo_folded?: string | null; tempo_user?: number | null }
   beats: number[]
   downbeats: number[]
   key: {
@@ -174,6 +174,10 @@ export const api = {
     fetch(`${BASE}/v1/analyses/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }).then(json<LibraryEntry>),
+  setTempo: (id: string, factor: 2 | 0.5 | null) =>
+    fetch(`${BASE}/v1/analyses/${id}/edits/tempo`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ factor }),
+    }).then(json<Job>),
   reanalyze: (id: string) =>
     fetch(`${BASE}/v1/analyses/${id}/reanalyze`, { method: 'POST' }).then(json<Job>),
   audioUrl: (id: string, stem: AudioStem = 'mix') =>

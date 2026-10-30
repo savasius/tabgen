@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import config
+from . import config, edits
 from .cache import cached_json, write_json_atomic
 from .device import run_with_timeout
 from .stages import beats as beats_stage
@@ -170,6 +170,9 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     n_notes = len(raw_notes.get("notes") or []) if raw_notes.get("model") else None
     beats, beat_source = choose_beat_grid(beats, struct, n_notes, duration)
     beats = post.fold_tempo_octave(beats, duration)
+    tempo_factor = (edits.load(audio_hash) or {}).get("tempo_factor")
+    if tempo_factor:
+        beats = post.scale_tempo(beats, float(tempo_factor), duration)
     intervals = post._beat_intervals(beats["beats"], duration)
     beat_labels = post.collapse_power_qualities(post.chord_per_beat(raw_chords, intervals))
     grid, bars, ts, merged = post.rebuild_after_labels(
@@ -260,7 +263,8 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "meta": {"title": None, "artist": None, "source": None, **(meta or {})},
         "duration": round(duration, 3),
         "tempo": {"bpm": beats["bpm"], "bpm_allin1": struct.get("bpm"), "time_signature": ts,
-                  "beat_source": beat_source, "tempo_folded": beats.get("tempo_folded")},
+                  "beat_source": beat_source, "tempo_folded": beats.get("tempo_folded"),
+                  "tempo_user": beats.get("tempo_user")},
         "beats": beats["beats"],
         "downbeats": beats["downbeats"],
         "key": key,

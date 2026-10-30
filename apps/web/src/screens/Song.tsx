@@ -108,6 +108,12 @@ function SongChrome({ parts, partId, setPartId }: {
   const [coach, setCoach] = useState(() => sessionStorage.getItem('tabgen.coach') !== '1')
   const [reErr, setReErr] = useState<string | null>(null)
   const nav = useNavigate()
+  const fixTempo = (factor: 2 | 0.5 | null) => {
+    // chord fixes are per beat: a new beat grid can't keep them (tab fixes are timed and stay)
+    if (a.edits?.chords?.length && !window.confirm(t('song.tempoFix.dropsChords'))) return
+    setReErr(null)
+    api.setTempo(a.id, factor).then((j) => nav(`/processing/${j.id}`)).catch((e) => setReErr(String((e as Error).message)))
+  }
 
   const NOTE_PC: Record<string, number> = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 }
   const keyTonic = NOTE_PC[a.key.tonic]
@@ -139,7 +145,23 @@ function SongChrome({ parts, partId, setPartId }: {
             <HelpTip content={t('help.key')} />
           </span>
           <span className="inline-flex items-center gap-1">
-            <Badge>{Math.round(a.tempo.bpm)} {t('common.bpm')}</Badge>
+            {/* the tempo octave is the one guess users can always hear is wrong: one click fixes it */}
+            <Menu>
+              <MenuTrigger asChild>
+                <button type="button" className="rounded-md focus-visible:outline-2" aria-label={t('song.tempoFix.title')}
+                  data-testid="tempo-menu">
+                  <Badge className="cursor-pointer">
+                    {Math.round(a.tempo.bpm)} {t('common.bpm')}{a.tempo.tempo_user ? ' ✎' : ''}
+                  </Badge>
+                </button>
+              </MenuTrigger>
+              <MenuContent>
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('song.tempoFix.title')}</p>
+                <MenuItem onSelect={() => fixTempo(2)}>{t('song.tempoFix.double', { n: Math.round(a.tempo.bpm * 2) })}</MenuItem>
+                <MenuItem onSelect={() => fixTempo(0.5)}>{t('song.tempoFix.half', { n: Math.round(a.tempo.bpm / 2) })}</MenuItem>
+                {a.tempo.tempo_user ? <MenuItem onSelect={() => fixTempo(null)}>{t('song.tempoFix.auto')}</MenuItem> : null}
+              </MenuContent>
+            </Menu>
             <HelpTip content={t('help.bpm')} />
           </span>
           <Badge variant="outline">

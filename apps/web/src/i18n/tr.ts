@@ -136,6 +136,13 @@ export const tr = {
     failedTitle: "Bu şarkıyı hazırlayamadık",
   },
   song: {
+    tempoFix: {
+      title: "Tempo yanlış mı?",
+      double: "Vuruş iki kat hızlı ({n} BPM)",
+      half: "Vuruş yarı hızda ({n} BPM)",
+      auto: "Otomatik tempoya dön",
+      dropsChords: "Tempo değişince elle düzelttiğin akorlar sıfırlanır (tab düzeltmelerin kalır). Devam edilsin mi?",
+    },
     tabs: { chords: "Akorlar", tab: "Tab", play: "Birlikte çal" },
     key: "Ton",
     tempo: "Tempo",

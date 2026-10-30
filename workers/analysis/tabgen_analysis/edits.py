@@ -5,6 +5,7 @@ reanalysis (the user's correction is the ground truth; a new engine must not ove
 
   {"tabs":   {"all": [note, ...], "s1": [...]},     replaces that guitar's notes
    "chords": {"all": {"<beat index>": "A:min"}, ...},  per-beat chord labels
+   "tempo_factor": 2 | 0.5,                            beat twice / half as fast (pipeline.run)
    "updated_at": 1730000000.0}
 
 apply() rewrites tab notes, alphaTex/MusicXML, grid and chord segments, and marks what changed.
@@ -43,7 +44,7 @@ def load(audio_hash: str) -> dict:
 
 def _save(audio_hash: str, data: dict) -> dict:
     data["updated_at"] = time.time()
-    if not data.get("tabs") and not data.get("chords"):
+    if not data.get("tabs") and not data.get("chords") and not data.get("tempo_factor"):
         edits_path(audio_hash).unlink(missing_ok=True)
         return {}
     write_json_atomic(edits_path(audio_hash), data)
@@ -100,6 +101,21 @@ def set_chords(audio_hash: str, part: str, beats: dict[str, str] | None) -> dict
             if label != "N" and parse(label).root is None:
                 raise ValueError(f"unknown chord {label!r}")
         chords[part] = {str(int(k)): v for k, v in beats.items()}
+    return _save(audio_hash, data)
+
+
+def set_tempo(audio_hash: str, factor: float | None) -> dict:
+    """Store a tempo correction (2, 0.5, or None for automatic). Takes effect on reanalysis.
+    Chord fixes are per beat, so they no longer line up with the new grid and are dropped;
+    tab fixes are timed notes and carry over."""
+    if factor not in (None, 0.5, 2):
+        raise ValueError("tempo factor must be 2, 0.5 or automatic")
+    data = load(audio_hash)
+    if factor is None:
+        data.pop("tempo_factor", None)
+    else:
+        data["tempo_factor"] = factor
+    data.pop("chords", None)
     return _save(audio_hash, data)
 
 
