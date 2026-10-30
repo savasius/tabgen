@@ -4,6 +4,8 @@
  * each fixes a refused microphone in a different place.
  */
 
+import { diag } from './diag'
+
 export type MicProblem = 'insecure' | 'denied' | 'nodevice' | 'busy' | 'other'
 export type MicPlace = 'mac-app' | 'ios' | 'browser'
 
@@ -32,10 +34,17 @@ export function micProblem(e: unknown): MicProblem {
 
 export async function openMic(audio: MediaTrackConstraints = {}): Promise<MediaStream> {
   // browsers hide the microphone API entirely on plain-http pages (e.g. http://<mac-ip>:8000)
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new MicError('insecure')
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    diag(`mic insecure secure=${window.isSecureContext}`)
+    throw new MicError('insecure')
+  }
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio })
+    const s = await navigator.mediaDevices.getUserMedia({ audio })
+    const t = s.getAudioTracks()[0]
+    diag(`mic ok ${t ? `${t.label} ${t.readyState} muted=${t.muted}` : 'no audio track'}`)
+    return s
   } catch (e) {
+    diag(`mic FAILED ${(e as Error)?.name}: ${(e as Error)?.message}`)
     throw new MicError(micProblem(e), (e as Error)?.message)
   }
 }
@@ -56,4 +65,29 @@ export async function recordingExt(blob: Blob): Promise<string> {
   if (ascii(0, 4) === 'OggS') return 'ogg'
   if (ascii(0, 4) === 'RIFF') return 'wav'
   return blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+}
+
+/**
+ * An AudioContext that starts as soon as the player touches the page. iPhone (and the Mac app)
+ * create contexts suspended when no tap started them -- e.g. the tuner, which opens the mic on
+ * page load -- and a suspended context hears nothing, so the needle never moves.
+ */
+const contexts = new Set<AudioContext>()
+export function newAudioContext(opts?: AudioContextOptions): AudioContext {
+  const c = new AudioContext(opts)
+  contexts.add(c)
+  diag(`audio context ${c.state} ${c.sampleRate}Hz`)
+  c.addEventListener('statechange', () => {
+    diag(`audio context -> ${c.state}`)
+    if (c.state === 'closed') contexts.delete(c)
+  })
+  return c
+}
+function wake() {
+  // iOS also has 'interrupted' (a call, Siri, another app took the audio)
+  contexts.forEach((c) => { if (c.state !== 'running' && c.state !== 'closed') void c.resume() })
+}
+if (typeof window !== 'undefined') {
+  for (const ev of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(ev, wake, true)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) wake() })
 }

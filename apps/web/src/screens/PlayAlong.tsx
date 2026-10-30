@@ -3,7 +3,7 @@ import { Headphones, Mic, MicOff } from 'lucide-react'
 import type { Section } from '@/api'
 import { useSong, soundingSpelling } from './song-session'
 import { useApp, type TKey } from '@/lib/store'
-import { micErrorKey, openMic } from '@/lib/mic'
+import { micErrorKey, openMic, newAudioContext } from '@/lib/mic'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { Transport } from '@/components/app/Transport'
@@ -56,7 +56,7 @@ export function PlayAlong() {
       try {
         stream = await openMic({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
         if (stopped) { stream.getTracks().forEach((tr) => tr.stop()); return }
-        ctx = new AudioContext()
+        ctx = newAudioContext()
         await ctx.resume()
         const an = ctx.createAnalyser()
         an.fftSize = 8192

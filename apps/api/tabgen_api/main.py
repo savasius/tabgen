@@ -2,9 +2,10 @@ import json
 import logging
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -42,6 +43,25 @@ def get_config():
     return {"url_ingest_enabled": config.URL_INGEST_ENABLED, "device": config.DEVICE,
             "pipeline_version": PIPELINE_VERSION,
             "audio_stems": ["mix", "original", "guitar"]}
+
+
+class _Diag(BaseModel):
+    lines: list[str]
+
+
+@app.post("/v1/diag")
+def client_diag(body: _Diag, request: Request):
+    """Microphone / audio events from a phone or browser, appended to data/logs/client.log so a
+    "the tuner doesn't work on my phone" report can be read instead of guessed (local only)."""
+    ua = request.headers.get("user-agent", "")
+    who = "iphone" if "iPhone" in ua else "ipad" if "iPad" in ua else "mac-app" if "TabGenMac" in ua else "browser"
+    log_dir = config.DATA_DIR / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with open(log_dir / "client.log", "a", encoding="utf-8") as f:
+        for line in body.lines[:200]:
+            f.write(f"{stamp} {who} {line[:500]}\n")
+    return {"ok": True}
 
 
 @app.post("/v1/jobs/upload")

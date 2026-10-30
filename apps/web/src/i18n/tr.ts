@@ -373,7 +373,7 @@ export const tr = {
     manual: "Tel seç",
     chromatic: "Kromatik",
     hold: "Teli çal ve sesini biraz tut",
-    startMic: "Mikrofonu aç",
+    startMic: "Dinlemeye başlamak için dokun",
     tighten: "Biraz sık (ses ince gelmeli)",
     loosen: "Biraz gevşet (ses kalın gelmeli)",
     inTune: "Tamam! Sonraki tele geç",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type TKey } from '@/lib/store'
-import { micErrorKey, openMic } from '@/lib/mic'
+import { micErrorKey, openMic, newAudioContext } from '@/lib/mic'
 import { TUNINGS, type TuningId } from '@/lib/tunings'
 import { centsBetween, detectPitch, nearestNote, PitchSmoother } from '@/lib/pitch'
 import { Button } from '@/components/ui/button'
@@ -48,8 +48,11 @@ export function Tuner() {
       try {
         stream = await openMic({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
         if (stopped) { stream.getTracks().forEach((tr) => tr.stop()); return }
-        ctx = new AudioContext()
-        if (ctx.state === 'suspended') setNeedsTap(true)
+        ctx = newAudioContext()
+        const c = ctx
+        // shown until the context runs: a first tap anywhere starts it (lib/mic.ts)
+        setNeedsTap(c.state !== 'running')
+        c.addEventListener('statechange', () => setNeedsTap(c.state !== 'running' && c.state !== 'closed'))
         const an = ctx.createAnalyser()
         an.fftSize = 4096
         ctx.createMediaStreamSource(stream).connect(an)
@@ -111,7 +114,7 @@ export function Tuner() {
   const label = reading?.label ?? (mode === 'chromatic' ? '–' : tuning.notes[string].replace(/\d/, ''))
 
   const playTone = () => {
-    const ctx = new AudioContext()
+    const ctx = newAudioContext()
     const osc = ctx.createOscillator()
     const g = ctx.createGain()
     osc.type = 'triangle'

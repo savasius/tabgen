@@ -362,7 +362,7 @@ export const en: Dict = {
     manual: "Pick string",
     chromatic: "Chromatic",
     hold: "Play the string and let it ring",
-    startMic: "Turn on the microphone",
+    startMic: "Tap to start listening",
     tighten: "Tighten a bit (should sound higher)",
     loosen: "Loosen a bit (should sound lower)",
     inTune: "In tune! Next string",

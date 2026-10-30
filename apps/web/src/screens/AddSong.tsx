@@ -1,7 +1,8 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Mic, Upload, FileVideo } from 'lucide-react'
 import { useApp, type TKey } from '@/lib/store'
-import { micErrorKey, openMic, recordingExt } from '@/lib/mic'
+import { micErrorKey, openMic, recordingExt, newAudioContext } from '@/lib/mic'
+import { diag } from '@/lib/diag'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -201,6 +202,7 @@ function MicPanel() {
         stopTracks()
         const type = mr.mimeType || chunks.current[0]?.type || ''
         const b = new Blob(chunks.current, type ? { type } : undefined)
+        diag(`recording stopped: ${chunks.current.length} parts, ${b.size} bytes, ${type || 'no type'}`)
         if (!b.size) {
           // nothing reached the recorder: don't upload an empty file the analysis can't read
           setErr(t('add.mic.empty'))
@@ -216,7 +218,7 @@ function MicPanel() {
       setRec('live')
       setSec(0)
       const started = Date.now()
-      const ctx = new AudioContext()
+      const ctx = newAudioContext()
       const src = ctx.createMediaStreamSource(stream)
       const an = ctx.createAnalyser()
       an.fftSize = 256
