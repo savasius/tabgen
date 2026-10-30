@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Headphones, Mic, MicOff } from 'lucide-react'
+import { GraduationCap, Headphones, Mic, MicOff } from 'lucide-react'
 import type { Section } from '@/api'
 import { useSong, soundingSpelling } from './song-session'
 import { useApp, type TKey } from '@/lib/store'
@@ -12,6 +12,7 @@ import { detectPitch, rms } from '@/lib/pitch'
 import { BeatScore, chordMatch, chroma, noteMatch } from '@/lib/playalong'
 import { shiftChordLabel } from '@/lib/tab-edit'
 import { cn } from '@/lib/utils'
+import { coach, COACH, initialCoach, type CoachMessage, type CoachState } from '@/lib/coach'
 
 type Verdict = 'hit' | 'miss' | null
 
@@ -40,6 +41,9 @@ export function PlayAlong() {
   const [, setTick] = useState(0)
   const names = sectionNames(a.sections, t)
   const score = useRef(new BeatScore())
+  const [coachOn, setCoachOn] = useState(() => localStorage.getItem('tabgen.coach') !== '0')
+  const [cs, setCs] = useState<CoachState>(initialCoach)
+  const prevTime = useRef(s.time)
   const live = useRef({ time: s.time, playing: s.playing, mode, latency, a, transpose: s.transpose })
   live.current = { time: s.time, playing: s.playing, mode, latency, a, transpose: s.transpose }
 
@@ -135,6 +139,76 @@ export function PlayAlong() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatsInRange, a.grid, sum.played])
 
+  // the bars the coach drills: one bar, or two when a bar is shorter than ~1.5 s (too quick to loop)
+  const drillRange = (bar: number) => {
+    const b = a.bars[bar]
+    const nxt = a.bars[bar + 1]
+    const end = b.end - b.start < 1.5 && nxt ? nxt.end : b.end
+    return { start: b.start, end, label: `${bar + 1}` }
+  }
+  const scoreIn = (range: { start: number; end: number }) => {
+    let hit = 0
+    let all = 0
+    a.grid.forEach((g, i) => {
+      if (g.t < range.start - 0.01 || g.t >= range.end) return
+      const r = score.current.result(i)
+      if (!r) return
+      all++
+      if (r === 'hit') hit++
+    })
+    return { hit, all }
+  }
+
+  // run-through over / pass over: the playhead wrapped round the loop or reached the end
+  useEffect(() => {
+    const prev = prevTime.current
+    prevTime.current = s.time
+    if (!listening || !coachOn) return
+    const wrapped = s.time < prev - 0.3
+    if (cs.phase === 'run') {
+      const end = range ? range.end : a.duration
+      // a pause in the middle is not the end of the run-through
+      if (!wrapped && s.time < end - 0.3) return
+      const bars = new Map<number, { hit: number; all: number }>()
+      for (const b of beatsInRange) {
+        const r = score.current.result(b)
+        if (!r) continue
+        const bar = a.grid[b].bar
+        const x = bars.get(bar) ?? { hit: 0, all: 0 }
+        x.all++
+        if (r === 'hit') x.hit++
+        bars.set(bar, x)
+      }
+      setCs((c) => coach(c, { type: 'runEnd', bars }))
+    } else if (cs.phase === 'drill' && cs.bar !== null && wrapped) {
+      const { hit, all } = scoreIn(drillRange(cs.bar))
+      score.current.reset()
+      setCs((c) => coach(c, { type: 'passEnd', hit, all }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.time, s.playing])
+
+  // do what the coach asks: loop its bar at its speed; back to normal when it's done
+  useEffect(() => {
+    if (!coachOn || !listening) return
+    if (cs.phase === 'drill' && cs.bar !== null) {
+      const r = drillRange(cs.bar)
+      if (s.loop?.start !== r.start || s.loop?.end !== r.end) {
+        score.current.reset()
+        s.setLoop(r)
+        s.seek(r.start)
+        if (!s.playing) s.toggle()
+      }
+      if (Math.abs(s.speed - cs.speed) > 1e-3) s.setSpeed(cs.speed)
+    } else if (cs.phase === 'done') {
+      s.setLoop(range ? { start: range.start, end: range.end, label: range.label } : null)
+      s.setSpeed(1)
+      setListening(false)
+      if (s.playing) s.toggle()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cs.phase, cs.bar, cs.speed, coachOn, listening])
+
   const start = () => {
     const from = section === 'all' ? 0 : section.start
     score.current.reset()
@@ -142,10 +216,15 @@ export function PlayAlong() {
     s.setLoop(section === 'all' ? null : { start: section.start, end: section.end, label: section.label })
     setMicErr(null)
     setListening(true)
+    s.setSpeed(1)
+    setCs(coachOn ? coach(initialCoach, { type: 'start' }) : initialCoach)
+    prevTime.current = from
     if (!s.playing) s.toggle()
   }
   const stop = () => {
     setListening(false)
+    if (cs.phase === 'drill') { s.setLoop(null); s.setSpeed(1) }
+    setCs(initialCoach)
     if (s.playing) s.toggle()
   }
 
@@ -252,6 +331,14 @@ export function PlayAlong() {
         </div>
       )}
 
+      <CoachCard
+        on={coachOn}
+        onToggle={(v) => { setCoachOn(v); localStorage.setItem('tabgen.coach', v ? '1' : '0'); if (!v) setCs(initialCoach) }}
+        state={cs}
+        onSkip={() => setCs((c) => coach(c, { type: 'skip' }))}
+        onStop={stop}
+      />
+
       {listening ? (
         <Button size="lg" variant="outline" onClick={stop} data-testid="play-stop"><MicOff className="size-4" /> {t('play.stop')}</Button>
       ) : (
@@ -304,6 +391,65 @@ export function PlayAlong() {
           guitarAvailable={s.guitarAvailable}
         />
       </div>
+    </div>
+  )
+}
+
+
+function coachText(m: CoachMessage, t: (k: TKey, v?: Record<string, string | number>) => string): string {
+  const pct = (x: number) => Math.round(x * 100)
+  switch (m.key) {
+    case 'allGood': return t('coach.allGood', { p: pct(m.acc) })
+    case 'drillStart': return t('coach.drillStart', { b: m.bar + 1, s: pct(m.speed) })
+    case 'again': return t('coach.again', { p: pct(m.acc) })
+    case 'faster': return t('coach.faster', { s: pct(m.speed) })
+    case 'slower': return t('coach.slower', { s: pct(m.speed) })
+    case 'mastered': return m.next === null ? t('coach.masteredLast', { b: m.bar + 1 }) : t('coach.mastered', { b: m.bar + 1, n: m.next + 1 })
+    case 'done': return t('coach.done', { n: m.mastered })
+    default: return t(`coach.${m.key}` as TKey)
+  }
+}
+
+function CoachCard({ on, onToggle, state, onSkip, onStop }: {
+  on: boolean
+  onToggle: (v: boolean) => void
+  state: CoachState
+  onSkip: () => void
+  onStop: () => void
+}) {
+  const { t } = useApp()
+  const drilling = state.phase === 'drill' && state.bar !== null
+  return (
+    <div className={cn('rounded-2xl border p-4', on ? 'border-primary/40 bg-primary/5' : 'border-border bg-card')} data-testid="coach">
+      <div className="flex items-center gap-3">
+        <GraduationCap className="size-5 shrink-0 text-primary" aria-hidden />
+        <p className="flex-1 font-medium">{t('coach.title')}</p>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} />
+          {t('coach.on')}
+        </label>
+      </div>
+      {on && (
+        <>
+          <p className="mt-2 text-sm" data-testid="coach-message">{coachText(state.message, t)}</p>
+          {drilling && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <span className="font-semibold">{t('coach.bar', { b: state.bar! + 1 })}</span>
+              <span className="tabular text-muted-foreground">{t('coach.speed', { s: Math.round(state.speed * 100) })}</span>
+              <span className="flex gap-1" aria-label={t('coach.goodPasses')}>
+                {Array.from({ length: COACH.goodToAdvance }, (_, i) => (
+                  <span key={i} className={cn('size-2.5 rounded-full', i < state.good ? 'bg-success' : 'bg-muted')} />
+                ))}
+              </span>
+              {state.targets.length > 0 && <span className="text-muted-foreground">{t('coach.left', { n: state.targets.length })}</span>}
+              <span className="ml-auto flex gap-2">
+                <Button size="sm" variant="outline" onClick={onSkip}>{t('coach.skip')}</Button>
+                <Button size="sm" variant="ghost" onClick={onStop}>{t('coach.stop')}</Button>
+              </span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
