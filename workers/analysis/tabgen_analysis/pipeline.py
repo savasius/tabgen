@@ -145,14 +145,6 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     )
 
     progress("key", 70)
-    key = timed(
-        "key",
-        lambda: cached_json(
-            audio_hash, f"{key_stage.MODEL_KEY}-src-{src_tag}",
-            lambda: key_stage.detect_key(guitar_path)),
-        required=False,
-        default={"tonic": "C", "mode": "major", "confidence": 0},
-    )
     tuning = cached_json(
         audio_hash, f"tuning-librosa-src-{src_tag}",
         lambda: key_stage.estimate_tuning(guitar_path),
@@ -168,6 +160,10 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         default={"notes": [], "model": None, "tabcnn": {"available": False}, "n_notes": 0},
     )
     n_notes = len(raw_notes.get("notes") or []) if raw_notes.get("model") else None
+    key = timed(
+        "key", lambda: key_stage.detect_key_notes(raw_notes.get("notes") or [], guitar_path),
+        required=False, default={"tonic": "C", "mode": "major", "confidence": 0},
+    )
     beats, beat_source = choose_beat_grid(beats, struct, n_notes, duration)
     beats = post.fold_tempo_octave(beats, duration)
     tempo_factor = (edits.load(audio_hash) or {}).get("tempo_factor")

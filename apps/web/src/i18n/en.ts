@@ -416,6 +416,7 @@ export const en: Dict = {
     storageBody: "{n} songs stored on this computer.",
     clearCache: "Clear cache",
     privacy: "Your audio files are only stored on this computer.",
+    creditRoles: { separation: "instrument separation", notes: "note detection", strings: "string prior", beats: "beats and tempo", sections: "sections", chords: "chords", render: "tab rendering", diagrams: "chord diagrams", app: "app" },
     licenses: "Open-source licenses",
     version: "Version",
     reduceMotion: "Reduce motion",

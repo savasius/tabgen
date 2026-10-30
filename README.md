@@ -76,7 +76,7 @@ upload / link ──▶ decode (ffmpeg, sha256 of PCM = cache key)
                  ├─ Beat This! on the mix ─▶ beats, downbeats, BPM (All-In-One 2× check; fold ½×/2× into 70–168)
                  ├─ All-In-One (our stems) ─▶ sections
                  ├─ lv-chordia on the isolated guitar stem ─▶ chords  (never mix / harmonic)
-                 ├─ S-KEY + tuning on the guitar stem
+                 ├─ key (profiles over the transcribed notes) + tuning on the guitar stem
                  ├─ post: beat grid, maj/min flicker or missing-third notes → :5, key from chord hierarchy
                  ├─ guitar stem → Basic Pitch (+ TabCNN-GPFX string/fret prior) → octave-clean
                  │    → split-bend merge → global Viterbi fingering (eval/fingering_fit.py)

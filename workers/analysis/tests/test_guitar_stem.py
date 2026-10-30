@@ -242,11 +242,11 @@ def _install_pipeline_mocks(monkeypatch, seen: dict, stems: Path):
 
     monkeypatch.setattr(chords_stage, "recognize", recognize)
 
-    def detect_key(path):
+    def detect_key_notes(notes, path):
         seen["key"] = Path(path).resolve()
         return {"tonic": "C", "mode": "major", "confidence": 1}
 
-    monkeypatch.setattr(key_stage, "detect_key", detect_key)
+    monkeypatch.setattr(key_stage, "detect_key_notes", detect_key_notes)
 
     def estimate_tuning(path):
         seen["tuning"] = Path(path).resolve()

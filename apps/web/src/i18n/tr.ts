@@ -427,6 +427,7 @@ export const tr = {
     storageBody: "{n} şarkı bu bilgisayarda saklı.",
     clearCache: "Önbelleği temizle",
     privacy: "Ses dosyaların sadece bu bilgisayarda saklanır.",
+    creditRoles: { separation: "enstrüman ayırma", notes: "nota bulma", strings: "tel tahmini", beats: "vuruş ve tempo", sections: "bölümler", chords: "akorlar", render: "tab gösterimi", diagrams: "akor şemaları", app: "uygulama" },
     licenses: "Açık kaynak lisansları",
     version: "Sürüm",
     reduceMotion: "Hareketi azalt",

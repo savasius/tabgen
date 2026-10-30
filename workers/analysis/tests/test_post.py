@@ -103,3 +103,16 @@ def test_scale_tempo_double_and_half():
     assert h["bpm"] == 30.0 and h["beats"][:3] == [0.0, 2.0, 4.0]
     assert h["downbeats"] == [0.0, 8.0]  # two old bars become one
     assert scale_tempo(g, 3) is g
+
+
+def test_key_from_notes():
+    from tabgen_analysis.stages.key import detect_key_notes
+    # a I-IV-V-I in G major, weighted like a real take
+    notes = []
+    t = 0.0
+    for chord in ([55, 59, 62, 67], [60, 64, 67, 72], [62, 66, 69, 74], [55, 59, 62, 67]) * 6:
+        for m in chord:
+            notes.append({"start": t, "end": t + 0.4, "midi": m, "velocity": 0.7})
+        t += 0.5
+    k = detect_key_notes(notes)
+    assert (k["tonic"], k["mode"], k["source"]) == ("G", "major", "notes")

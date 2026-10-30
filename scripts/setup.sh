@@ -57,7 +57,8 @@ fi
 
 say "Installing analysis pipeline + API"
 pip install -q -e workers/analysis -e apps/api
-# S-KEY pins old torch/numpy versions; install without its deps (they are already satisfied).
+# S-KEY: eval comparison only (eval/key_bench.py), its weights are non-commercial; the app doesn't use it.
+# It pins old torch/numpy versions; install without its deps (they are already satisfied).
 pip install -q --no-deps "skey @ git+https://github.com/deezer/s-key@918b83d273568d5041569bb8068843d19a335726"
 pip install -q --no-deps nnAudio==0.3.3
 # basic-pitch's Linux extra wants TensorFlow; we use the bundled ONNX model instead.

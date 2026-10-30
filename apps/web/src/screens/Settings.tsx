@@ -6,6 +6,7 @@ import { TUNINGS, type TuningId } from '@/lib/tunings'
 import type { Level } from '@/music/chords'
 import type { Notation } from '@/lib/display'
 import { api } from '@/api'
+import { CREDITS } from '@/lib/credits'
 
 export function Settings() {
   const { t, settings, set } = useApp()
@@ -111,12 +112,20 @@ export function Settings() {
 
       <Section title={t('settings.sections.about')}>
         <Row label={t('settings.version')}>
-          <span className="text-sm text-muted-foreground">0.2.0 · Phase 2</span>
+          <span className="text-sm text-muted-foreground">0.3.0 · p2.9</span>
         </Row>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Beat This! · all-in-one-infer · lv-chordia · S-KEY · Demucs · Basic Pitch · TabCNN-GPFX · alphaTab (MPL-2.0)
-        </p>
-        <p className="text-xs text-muted-foreground">{t('settings.licenses')}</p>
+        <details className="group" data-testid="licenses">
+          <summary className="cursor-pointer text-sm font-medium">{t('settings.licenses')}</summary>
+          <ul className="mt-3 space-y-2">
+            {CREDITS.map((c) => (
+              <li key={c.name} className="text-xs leading-relaxed">
+                <a href={c.url} target="_blank" rel="noreferrer" className="font-medium text-foreground underline-offset-4 hover:underline">{c.name}</a>
+                <span className="text-muted-foreground"> · {t(`settings.creditRoles.${c.role}` as TKey)} · {c.license}</span>
+                {c.notice && <p className="text-muted-foreground">{c.notice}</p>}
+              </li>
+            ))}
+          </ul>
+        </details>
       </Section>
     </div>
   )

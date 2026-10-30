@@ -5,12 +5,12 @@ TabGen is currently a **free, personal-use** tool. Before any public release, re
 
 | Component | Used for | Code license | Weights / data | Risk for publishing |
 |---|---|---|---|---|
-| [Beat This!](https://github.com/CPJKU/beat_this) | beats, downbeats, tempo | MIT | MIT (`final0`; mirrored on Hugging Face, same SHA-256) | low |
-| [all-in-one-infer](https://github.com/openmirlab/all-in-one-infer) (fork of [All-In-One](https://github.com/mir-aidj/all-in-one)) | sections (intro/verse/chorus/…) | MIT | MIT (Harmonix-trained) | low–medium (uses Demucs stems) |
+| [Beat This!](https://github.com/CPJKU/beat_this) | beats, downbeats, tempo | MIT | "The code and the published model weights are released under the MIT license" (training data caveat in README) | low |
+| [all-in-one-infer](https://github.com/openmirlab/all-in-one-infer) (fork of [All-In-One](https://github.com/mir-aidj/all-in-one)) | sections (intro/verse/chorus/…) | MIT | repo MIT; weights not separately licensed; trained on the Harmonix Set (annotations: MIT repo, audio not distributed) | medium (also needs the Demucs stems) |
 | [madmom-infer](https://pypi.org/project/madmom-infer/) | DBN post-processing inside all-in-one-infer | BSD | ships **no** madmom NC model files | low |
-| [lv-chordia](https://github.com/openmirlab/lv-chordia) (Jiang et al., ISMIR 2019) | chord recognition | MIT | MIT claimed; trained on annotation sets with non-commercial terms | **medium** — swappable via `ChordRecognizer` |
-| [S-KEY](https://github.com/deezer/s-key) (Deezer) | global key | MIT | MIT (bundled) | low |
-| [Demucs](https://github.com/adefossez/demucs) `htdemucs_6s` (via demucs-infer) | stem separation | MIT | weights trained incl. MUSDB18 (NC data); status unclear | **medium** |
+| [lv-chordia](https://github.com/openmirlab/lv-chordia) (Jiang et al., ISMIR 2019) | chord recognition | MIT | weights shipped in the MIT-licensed package; FAQ: "the MIT license allows commercial use"; training data not named | **medium** — the license-free `template` recognizer is 0.57 vs 0.75 majmin on GuitarSet (eval/chord_bench.py), too weak to replace it |
+| ~~[S-KEY](https://github.com/deezer/s-key) (Deezer)~~ | global key (until p2.8; now eval only) | MIT | **non-commercial research only** ("The MIT license does not apply to the model weights in skey.pt") | removed from the app in p2.9: key profiles over transcribed notes instead (`stages/key.py`, better on GuitarSet) |
+| [Demucs](https://github.com/adefossez/demucs) `htdemucs_6s` (via demucs-infer) | stem separation | MIT | README: htdemucs_6s "was trained only on Meta internal dataset" and "a CC-NC-BY license is likely applicable"; the author "cannot help granting a license" | **high — blocks a commercial release** (see docs/LISANS_DENETIMI.md) |
 | [librosa](https://librosa.org) | tuning estimate, audio I/O | ISC | — | low |
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | link input (personal mode only) | Unlicense | — | **high if hosted publicly** (YouTube ToS); disable with `TABGEN_URL_INGEST=0` |
 | [FFmpeg](https://ffmpeg.org) | decoding (external binary) | LGPL/GPL build-dependent | — | call as external process only |
@@ -36,5 +36,5 @@ Chordino/NNLS-Chroma (GPL), BTC chord model (weights marked NC in redistribution
 Slow-down uses the browser's built-in pitch-preserving `playbackRate`.
 
 Apple Silicon: Demucs is forced to CPU (`demucs_device()`), because PyTorch MPS raises
-`Output channels > 65536 not supported` on those convs. Beat This! / S-KEY can still use MPS
+`Output channels > 65536 not supported` on those convs. Beat This! can still use MPS
 and fall back to CPU if an op is missing.
