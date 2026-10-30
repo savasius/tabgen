@@ -82,6 +82,42 @@ def test_none_stems_raises():
         pick_guitar_source(None, Path("/nope/mix.wav"))  # type: ignore[arg-type]
 
 
+def test_bass_stem_that_is_leaked_guitar_is_added_back(tmp_path):
+    # no bass player: Demucs put the guitar's low notes (here A2 = 110 Hz) under "bass"
+    mix, stems = _stems(tmp_path)
+    _tone(stems / "guitar.wav", freq=330, amp=0.2, dur=2.0)
+    _tone(stems / "bass.wav", freq=110, amp=0.3, dur=2.0)
+    src = pick_guitar_source(stems, mix)
+    assert src.source == "guitar+bass"
+    assert src.path.name == "guitar_plus_bass.wav"
+    assert src.cache_tag() == "guitarplusbass"
+
+
+def test_guitar_playback_includes_recovered_low_notes(tmp_path):
+    d = separate.stems_dir(tmp_path)
+    _tone(d / "guitar.wav")
+    assert resolve_playback(tmp_path, "guitar")[0].name == "guitar.wav"
+    _tone(d / "guitar_plus_bass.wav")
+    assert resolve_playback(tmp_path, "guitar")[0].name == "guitar_plus_bass.wav"
+
+
+def test_real_bass_line_stays_out(tmp_path):
+    # a real bass sounds under 75 Hz (A1 = 55 Hz): never transcribed as guitar
+    mix, stems = _stems(tmp_path)
+    _tone(stems / "guitar.wav", freq=330, amp=0.2, dur=2.0)
+    _tone(stems / "bass.wav", freq=55, amp=0.3, dur=2.0)
+    src = pick_guitar_source(stems, mix)
+    assert src.source == "guitar"
+    assert src.path.name == "guitar.wav"
+
+
+def test_quiet_bass_stem_is_ignored(tmp_path):
+    mix, stems = _stems(tmp_path)
+    _tone(stems / "guitar.wav", freq=330, amp=0.2, dur=2.0)
+    _tone(stems / "bass.wav", freq=110, amp=0.002, dur=2.0)
+    assert pick_guitar_source(stems, mix).source == "guitar"
+
+
 def test_empty_guitar_warns_and_stays_on_guitar(tmp_path):
     mix, stems = _stems(tmp_path)
     _silence(stems / "guitar.wav")
@@ -206,11 +242,11 @@ def _install_pipeline_mocks(monkeypatch, seen: dict, stems: Path):
 
     monkeypatch.setattr(chords_stage, "recognize", recognize)
 
-    def detect_key(path):
+    def detect_key_notes(notes, path):
         seen["key"] = Path(path).resolve()
         return {"tonic": "C", "mode": "major", "confidence": 1}
 
-    monkeypatch.setattr(key_stage, "detect_key", detect_key)
+    monkeypatch.setattr(key_stage, "detect_key_notes", detect_key_notes)
 
     def estimate_tuning(path):
         seen["tuning"] = Path(path).resolve()
@@ -262,7 +298,7 @@ def test_pipeline_chords_key_tabs_use_guitar_not_harmonic(tmp_path, monkeypatch)
     assert out["guitar"]["source"] == "guitar"
     assert out["guitar"]["warning"] is None
     assert out["audio"]["guitar"].endswith("?stem=guitar")
-    assert out["version"].startswith("p2.3-guitarstem")
+    assert "guitarstem" in out["version"]
 
 
 def test_pipeline_separate_failure_does_not_copy_mix(tmp_path, monkeypatch):

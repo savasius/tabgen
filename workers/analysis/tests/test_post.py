@@ -73,3 +73,46 @@ def test_snap_sections_drops_silence_and_snaps():
     out = post.snap_sections(segs, [0.6, 10.0, 20.0, 30.0], 31.0)
     assert [s["label"] for s in out] == ["intro", "verse"]
     assert out[0]["start"] == 0.6 and out[1]["start"] == 10.0
+
+
+def test_68_bpm_ballad_is_not_doubled():
+    from tabgen_analysis.stages.post import fold_tempo_octave
+    beats = [i * 60 / 68 for i in range(40)]
+    out = fold_tempo_octave({"bpm": 68.0, "beats": beats, "downbeats": beats[::4]}, 40.0)
+    assert out["bpm"] == 68.0 and "tempo_folded" not in out
+
+
+def test_dense_guitar_keeps_the_fast_grid():
+    from tabgen_analysis.pipeline import choose_beat_grid
+    bt = {"bpm": 166.0, "beats": [i * 60 / 166 for i in range(200)], "downbeats": []}
+    aio = {"bpm": 83.0, "beats": [i * 60 / 83 for i in range(100)], "downbeats": [i * 4 * 60 / 83 for i in range(25)]}
+    # 7 notes per half-time beat: the fast grid was the real beat (fast bossa comping)
+    assert choose_beat_grid(bt, aio, n_notes=500, duration=72.0)[1] == "beat_this"
+    # 2 notes per half-time beat: felt half time, as in I'm Yours (76 not 152)
+    assert choose_beat_grid(bt, aio, n_notes=200, duration=72.0)[1] == "allin1"
+
+
+def test_scale_tempo_double_and_half():
+    from tabgen_analysis.stages.post import scale_tempo
+    beats = [i * 1.0 for i in range(16)]  # 60 BPM, 4/4, downbeats every 4 beats
+    g = {"beats": beats, "downbeats": beats[0::4], "bpm": 60.0}
+    d = scale_tempo(g, 2, duration=16.5)
+    assert d["bpm"] == 120.0 and len(d["beats"]) == 32
+    assert d["downbeats"][:3] == [0.0, 2.0, 4.0]  # every old bar split in two
+    h = scale_tempo(g, 0.5, duration=16.5)
+    assert h["bpm"] == 30.0 and h["beats"][:3] == [0.0, 2.0, 4.0]
+    assert h["downbeats"] == [0.0, 8.0]  # two old bars become one
+    assert scale_tempo(g, 3) is g
+
+
+def test_key_from_notes():
+    from tabgen_analysis.stages.key import detect_key_notes
+    # a I-IV-V-I in G major, weighted like a real take
+    notes = []
+    t = 0.0
+    for chord in ([55, 59, 62, 67], [60, 64, 67, 72], [62, 66, 69, 74], [55, 59, 62, 67]) * 6:
+        for m in chord:
+            notes.append({"start": t, "end": t + 0.4, "midi": m, "velocity": 0.7})
+        t += 0.5
+    k = detect_key_notes(notes)
+    assert (k["tonic"], k["mode"], k["source"]) == ("G", "major", "notes")

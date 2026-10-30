@@ -4,7 +4,14 @@ from pathlib import Path
 import torch
 
 # p2.3: chords + key + tabs always on the isolated guitar stem (never mix / harmonic).
-PIPELINE_VERSION = "p2.3-guitarstem-bt1.1-aio3.1-lvc1.1-skey-bp-tabcnn"
+# p2.4: global Viterbi fingering, split-bend merge, stricter legato, export keeps every onset,
+#       per-bar tempo in alphaTex (tab synth follows the recording).
+PIPELINE_VERSION = "p3.0-strnet1-key2-bp7-fing3-basslk1-tempo2-parts1-tabv3-guitarstem-bt1.1-aio3.1-lvc1.1-bp-tabcnn"
+
+# Product build: every input is treated as a guitar recording (no separation / section models,
+# whose weights aren't licensed for commercial use -- docs/LISANS_DENETIMI.md).
+EDITION = os.environ.get("TABGEN_EDITION", "personal")
+GUITAR_ONLY = EDITION == "product"
 
 DATA_DIR = Path(os.environ.get("TABGEN_DATA_DIR", Path(__file__).resolve().parents[3] / "data"))
 
@@ -30,7 +37,8 @@ CHORD_VOCAB = os.environ.get("TABGEN_CHORD_VOCAB", "submission")
 MAX_DURATION_S = float(os.environ.get("TABGEN_MAX_DURATION_S", 600))
 
 # Personal/local mode: link input via yt-dlp. Turn off for any public deployment (see README).
-URL_INGEST_ENABLED = os.environ.get("TABGEN_URL_INGEST", "1") == "1"
+# Link download (yt-dlp) is personal-use only; the product build never offers it.
+URL_INGEST_ENABLED = os.environ.get("TABGEN_URL_INGEST", "1") == "1" and EDITION != "product"
 
 # Eval/tests only: the clip already IS guitar. Real user uploads must never set this.
 SKIP_SEPARATE = os.environ.get("TABGEN_SKIP_SEPARATE", "0") == "1"

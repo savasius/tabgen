@@ -174,14 +174,14 @@ def _quality_mode(quality: str | None) -> str | None:
 
 # Guitarists count a pulse in roughly this range. Beat This! (and most trackers)
 # often lock onto 2× or ½× the felt beat; fold when the raw BPM is outside.
-_GUITAR_BPM_LO = 70.0
+_GUITAR_BPM_LO = 65.0  # was 70: 68 BPM ballads are real (eval/tempo_bench.py --fit)
 _GUITAR_BPM_HI = 168.0
 
 
 def fold_tempo_octave(beats: dict, duration: float | None = None) -> dict:
     """Rewrite a half- or double-time beat grid into a guitar-typical BPM.
 
-    Not a per-song override: any tracker BPM below ~70 is doubled (midpoints
+    Not a per-song override: any tracker BPM below ~65 is doubled (midpoints
     inserted); any BPM above ~168 is halved (every other beat kept, preferring
     the parity that still hits the reported downbeats).
     """
@@ -222,6 +222,40 @@ def fold_tempo_octave(beats: dict, duration: float | None = None) -> dict:
                 "bpm": round(bpm / 2.0, 1), "bpm_raw": round(bpm, 1),
                 "tempo_folded": "half"}
     return beats
+
+
+def scale_tempo(beats: dict, factor: float, duration: float | None = None) -> dict:
+    """The user's tempo correction: 2 = the beat is twice as fast as detected (a beat between
+    every two, each bar split in two), 0.5 = half as fast (every other beat, two bars become one).
+    Applied after the automatic choice, so bars, chords and tab all follow it."""
+    raw = [float(t) for t in beats.get("beats") or []]
+    down = [float(d) for d in beats.get("downbeats") or []]
+    bpm = float(beats.get("bpm") or 0)
+    if factor not in (0.5, 2) or len(raw) < 4 or bpm <= 0:
+        return beats
+    if factor == 2:
+        new_b = []
+        for i, t in enumerate(raw):
+            new_b.append(round(t, 4))
+            if i + 1 < len(raw):
+                new_b.append(round((t + raw[i + 1]) / 2.0, 4))
+        tail = raw[-1] + (raw[-1] - raw[-2]) / 2.0
+        if duration is None or tail < float(duration) - 0.04:
+            new_b.append(round(tail, 4))
+        # each old bar becomes two: a new downbeat on the beat nearest the old bar's middle
+        new_db = list(down)
+        for a, b in zip(down, down[1:]):
+            mid = (a + b) / 2.0
+            new_db.append(min(new_b, key=lambda t: abs(t - mid)))
+        new_db = sorted({round(d, 4) for d in new_db})
+        return {**beats, "beats": new_b, "downbeats": new_db, "bpm": round(bpm * 2, 1), "tempo_user": 2}
+    near = lambda seq, d: any(abs(d - t) < 0.06 for t in seq)  # noqa: E731
+    even, odd = raw[0::2], raw[1::2]
+    new_b = even if sum(near(even, d) for d in down) >= sum(near(odd, d) for d in down) else odd
+    kept = [d for d in down if near(new_b, d)]
+    new_db = kept[0::2] if len(kept) >= 4 else kept
+    return {**beats, "beats": [round(t, 4) for t in new_b], "downbeats": [round(d, 4) for d in new_db],
+            "bpm": round(bpm / 2, 1), "tempo_user": 0.5}
 
 
 # Tonal hierarchy (Temperley-style) over chord *roots*, used to pick among

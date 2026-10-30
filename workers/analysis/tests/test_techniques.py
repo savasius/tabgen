@@ -3,7 +3,10 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from tabgen_analysis.techniques import annotate, classify_contour
+import pytest
+
+from tabgen_analysis import techniques
+from tabgen_analysis.techniques import annotate, classify_contour, glide_cents, merge_split_bends
 
 SR = 22050
 
@@ -36,7 +39,18 @@ def _write(path: Path, clips: list[tuple[float, np.ndarray]], duration: float) -
     return path
 
 
-def test_rising_contour_is_a_bend():
+@pytest.fixture
+def in_note_bends(monkeypatch):
+    # Off in the pipeline (0/113 correct on IDMT licks); the detector itself still works.
+    monkeypatch.setattr(techniques, "IN_NOTE_BENDS", True)
+
+
+def test_in_note_bends_are_off_by_default():
+    assert classify_contour([0, 0, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3], 0.4) == [] or \
+        all(t["type"] != "bend" for t in classify_contour([0, 0, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3], 0.4))
+
+
+def test_rising_contour_is_a_bend(in_note_bends):
     # 1/3-semitone bins: +3 bins = 100 cents.
     bends = [0, 0, 1, 2, 3, 3, 3, 3]
     tags = classify_contour(bends, 0.4)
@@ -68,7 +82,7 @@ def test_weak_onset_is_hammer():
         {"start": 0.00, "end": 0.20, "midi": 64, "string": 1, "fret": 5,
          "velocity": 0.8, "onset_ratio": 3.2, "bends": None},
         {"start": 0.18, "end": 0.40, "midi": 65, "string": 1, "fret": 6,
-         "velocity": 0.5, "onset_ratio": 1.1, "bends": None},
+         "velocity": 0.5, "onset_ratio": 1.0, "bends": None},
     ]
     annotate(notes)
     hammer = next(t for t in notes[0]["techniques"] if t["type"] == "hammer")
@@ -158,7 +172,7 @@ def test_audio_picked_pair_is_not_hammer(tmp_path):
     assert "pull" not in kinds
 
 
-def test_audio_bend_via_pyin(tmp_path):
+def test_audio_bend_via_pyin(tmp_path, in_note_bends):
     path = _write(tmp_path / "bend.wav", [
         (0.00, _tone(62, 0.55, attack=0.004, vel=0.85, midi_end=64)),
     ], 0.60)
@@ -176,3 +190,51 @@ def test_audio_vibrato_via_pyin(tmp_path):
     notes = [{"start": 0.02, "end": 0.78, "midi": 57, "string": 3, "fret": 2, "velocity": 0.8, "bends": None}]
     annotate(notes, audio_path=path)
     assert any(t["type"] == "vibrato" for t in notes[0]["techniques"])
+
+
+def _bp_note(start, end, midi, bends, onset=1.0, vel=0.7):
+    return {"start": start, "end": end, "midi": midi, "velocity": vel, "confidence": vel,
+            "bends": bends, "onset_ratio": onset}
+
+
+def test_split_bend_is_merged_into_one_bent_note():
+    # Basic Pitch: fretted A2 (tail rising), then unpicked A#2 starting below pitch and ramping.
+    a = _bp_note(0.00, 0.12, 45, [1] * 8 + [1, 2, 2])
+    b = _bp_note(0.12, 0.40, 46, [-1, -1, 0, 0, 1, 1] + [1] * 14)
+    out = merge_split_bends([a, b])
+    assert len(out) == 1
+    bend = next(t for t in out[0]["techniques"] if t["type"] == "bend")
+    assert bend["quarter_tones"] == 2 and out[0]["midi"] == 45
+    assert out[0]["end"] == pytest.approx(0.40)
+
+
+def test_bend_and_release_folds_three_notes():
+    a = _bp_note(0.00, 0.12, 57, [1] * 8 + [2, 3, 3])
+    b = _bp_note(0.12, 0.40, 59, [-2, -1, -1, 0, 0, 1] + [1] * 14)
+    c = _bp_note(0.40, 0.70, 57, [3, 3, 2, 1] + [1] * 16)
+    out = merge_split_bends([a, b, c])
+    assert len(out) == 1
+    bend = out[0]["techniques"][0]
+    assert bend["quarter_tones"] == 4 and bend.get("release")
+
+
+def test_fast_two_fret_glide_is_a_slide_not_a_bend():
+    # IDMT slides jump fret to fret in 1-2 contour frames.
+    a = _bp_note(0.00, 0.15, 60, [1] * 12 + [4])
+    b = _bp_note(0.15, 0.60, 62, [-2] + [1] * 30)
+    out = merge_split_bends([a, b])
+    assert len(out) == 2
+    assert out[0].get("slide_hint", {}).get("to_midi") == 62
+
+
+def test_hammer_has_no_glide_and_is_not_merged():
+    a = _bp_note(0.00, 0.15, 60, [1] * 13)
+    b = _bp_note(0.15, 0.40, 62, [1] * 20, onset=1.1)
+    assert glide_cents(a, b) < 40
+    assert len(merge_split_bends([a, b])) == 2
+
+
+def test_picked_second_note_is_never_a_bend():
+    a = _bp_note(0.00, 0.12, 45, [1] * 8 + [1, 2, 2])
+    b = _bp_note(0.12, 0.40, 46, [-1, -1, 0, 0, 1, 1] + [1] * 14, onset=6.0)
+    assert len(merge_split_bends([a, b])) == 2

@@ -10,11 +10,12 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import config
+from . import config, edits
 from .cache import cached_json, write_json_atomic
 from .device import run_with_timeout
 from .stages import beats as beats_stage
 from .stages import chords as chords_stage
+from .stages import guitar_parts
 from .stages import key as key_stage
 from .stages import post, separate, structure
 from .stages import tabs as tabs_stage
@@ -48,12 +49,27 @@ def tab_alphatex_path(audio_hash: str) -> Path:
     return config.track_dir(audio_hash) / f"tab@{config.PIPELINE_VERSION}.alphatex"
 
 
-def choose_beat_grid(bt: dict, aio: dict) -> tuple[dict, str]:
+def part_musicxml_path(audio_hash: str, part_id: str) -> Path:
+    return config.track_dir(audio_hash) / f"tab@{config.PIPELINE_VERSION}.{part_id}.musicxml"
+
+
+# A half-time grid holding more played notes per beat than this is too slow to read (fast jazz /
+# bossa comping at 150-200 BPM came out at half speed). Fitted with eval/tempo_bench.py --fit.
+HALF_TIME_MAX_NOTES_PER_BEAT = 4.0
+
+
+def choose_beat_grid(bt: dict, aio: dict, n_notes: int | None = None,
+                     duration: float | None = None) -> tuple[dict, str]:
     """Beat This! is primary. Both trackers sometimes lock onto eighth notes; when Beat This! is
     fast (>130 BPM) and All-In-One reports exactly half, use All-In-One's grid (the felt tempo
-    guitarists count, e.g. I'm Yours: 76 not 152)."""
+    guitarists count, e.g. I'm Yours: 76 not 152) — unless the guitar plays so many notes that the
+    half-time bars would be crammed, which means the fast grid was the real beat."""
     bpm_bt, bpm_aio = bt["bpm"], float(aio.get("bpm") or 0)
     if bpm_bt > 130 and bpm_aio and abs(bpm_bt / bpm_aio - 2) < 0.12 and len(aio.get("downbeats", [])) > 4:
+        if n_notes and duration:
+            per_beat = n_notes / max(1.0, duration * bpm_aio / 60.0)
+            if per_beat > HALF_TIME_MAX_NOTES_PER_BEAT:
+                return bt, "beat_this"
         return {"beats": aio["beats"], "downbeats": aio["downbeats"], "bpm": round(bpm_aio, 1)}, "allin1"
     return bt, "beat_this"
 
@@ -96,10 +112,18 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     mix = track / "mix.wav"
     duration = probe_duration(mix)
 
+    # "guitar": the upload is the player's own guitar take -- no separation model and no section
+    # model run (both need licensed weights, and neither is needed for a lone guitar).
+    guitar_only = (meta or {}).get("input") == "guitar" or config.GUITAR_ONLY
     progress("separating", 8)
-    # Required: a failed Demucs run must fail the job, not silently copy the mix into guitar.wav.
-    stems = timed("separate", lambda: separate.separate(track), required=True)
-    guitar = transcribe_stage.pick_guitar_source(stems, mix)
+    if guitar_only:
+        stems = timed("separate", lambda: separate.guitar_only(track), required=True)
+        guitar = transcribe_stage.GuitarSource(
+            path=stems / "guitar.wav", source="guitar-only", rms=1.0, mix_rms=1.0, ratio=1.0)
+    else:
+        # Required: a failed Demucs run must fail the job, not silently copy the mix into guitar.wav.
+        stems = timed("separate", lambda: separate.separate(track), required=True)
+        guitar = transcribe_stage.pick_guitar_source(stems, mix)
     guitar_path = guitar.path
     src_tag = guitar.cache_tag()
     sep_method = (separate.read_manifest(stems) or {}).get("method")
@@ -109,12 +133,13 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
                                                lambda: beats_stage.track_beats(mix)))
 
     progress("sections", 50)
-    struct = timed(
+    no_sections = {"bpm": beats.get("bpm", 0), "beats": beats.get("beats", []),
+                   "downbeats": beats.get("downbeats", []), "segments": []}
+    struct = no_sections if guitar_only else timed(
         "sections",
         lambda: cached_json(audio_hash, structure.MODEL_KEY, lambda: structure.analyze_structure(stems)),
         required=False,
-        default={"bpm": beats.get("bpm", 0), "beats": beats.get("beats", []),
-                 "downbeats": beats.get("downbeats", []), "segments": []},
+        default=no_sections,
     )
 
     progress("chords", 60)
@@ -129,26 +154,10 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     )
 
     progress("key", 70)
-    key = timed(
-        "key",
-        lambda: cached_json(
-            audio_hash, f"{key_stage.MODEL_KEY}-src-{src_tag}",
-            lambda: key_stage.detect_key(guitar_path)),
-        required=False,
-        default={"tonic": "C", "mode": "major", "confidence": 0},
-    )
     tuning = cached_json(
         audio_hash, f"tuning-librosa-src-{src_tag}",
         lambda: key_stage.estimate_tuning(guitar_path),
     )
-
-    beats, beat_source = choose_beat_grid(beats, struct)
-    beats = post.fold_tempo_octave(beats, duration)
-    intervals = post._beat_intervals(beats["beats"], duration)
-    beat_labels = post.collapse_power_qualities(post.chord_per_beat(raw_chords, intervals))
-    grid, bars, ts, merged = post.rebuild_after_labels(
-        beats, beat_labels, intervals, struct.get("segments") or [], duration)
-    key = post.reconcile_relative_key(key, merged)
 
     progress("transcribe", 80)
     raw_notes = timed(
@@ -159,6 +168,22 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         required=False,
         default={"notes": [], "model": None, "tabcnn": {"available": False}, "n_notes": 0},
     )
+    n_notes = len(raw_notes.get("notes") or []) if raw_notes.get("model") else None
+    key = timed(
+        "key", lambda: key_stage.detect_key_notes(raw_notes.get("notes") or [], guitar_path),
+        required=False, default={"tonic": "C", "mode": "major", "confidence": 0},
+    )
+    beats, beat_source = choose_beat_grid(beats, struct, n_notes, duration)
+    beats = post.fold_tempo_octave(beats, duration)
+    tempo_factor = (edits.load(audio_hash) or {}).get("tempo_factor")
+    if tempo_factor:
+        beats = post.scale_tempo(beats, float(tempo_factor), duration)
+    intervals = post._beat_intervals(beats["beats"], duration)
+    beat_labels = post.collapse_power_qualities(post.chord_per_beat(raw_chords, intervals))
+    grid, bars, ts, merged = post.rebuild_after_labels(
+        beats, beat_labels, intervals, struct.get("segments") or [], duration)
+    key = post.reconcile_relative_key(key, merged)
+
     beat_labels = post.collapse_missing_thirds(beat_labels, intervals, raw_notes.get("notes") or [])
     grid, bars, ts, merged = post.rebuild_after_labels(
         beats, beat_labels, intervals, struct.get("segments") or [], duration)
@@ -185,7 +210,51 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
     tab.setdefault("stats", {})["guitar_source"] = guitar.source
     tab["stats"]["guitar_rms"] = round(float(guitar.rms), 5)
 
+    # Several guitars in the stem (panned apart, or a lead line over comping): one tab each.
+    # The whole-stem tab above stays as "all guitars" so older clients keep working.
+    progress("parts", 93)
+    found = timed("parts", lambda: guitar_parts.find_parts(
+        audio_hash, guitar_path, raw_notes, list(STANDARD_TUNING)), required=False, default=[])
+    parts_out = []
+    for part in guitar_parts.order(found or []):
+        pchords, pgrid = merged, None
+        if part["split"] == "stereo" and part["role"] != "lead":
+            praw = cached_json(
+                audio_hash, f"{recognizer.key}-src-{part['tag']}",
+                lambda part=part: chords_stage.recognize(part["audio"], recognizer))
+            labels = post.collapse_power_qualities(post.chord_per_beat(praw, intervals))
+            labels = post.collapse_missing_thirds(labels, intervals, part["raw"]["notes"])
+            pgrid, _b, _ts, pchords = post.rebuild_after_labels(
+                beats, labels, intervals, struct.get("segments") or [], duration)
+        ptab = timed(f"tab-{part['id']}", lambda part=part, pchords=pchords: tabs_stage.build_tab(
+            part["raw"], beats=beats["beats"], bars=bars, sections=sections, chords=pchords,
+            duration=duration, bpm=beats["bpm"], ts=ts, title=title, guitar_path=part["audio"], capo=0,
+        ), required=False, default=None)
+        if not ptab:
+            continue
+        pxml = ptab.pop("musicxml", None)
+        if pxml:
+            part_musicxml_path(audio_hash, part["id"]).write_text(pxml)
+        parts_out.append({
+            "id": part["id"], "role": part["role"], "pan": part["pan"],
+            "side": guitar_parts.pan_label(part["pan"]), "share": part["share"], "split": part["split"],
+            "chords": pchords, "grid": pgrid, "chords_source": "part" if pgrid else "song",
+            "audio": (f"/v1/analyses/{audio_hash}/audio?stem=guitar&part={part['id']}"
+                      if part["split"] == "stereo" else f"/v1/analyses/{audio_hash}/audio?stem=guitar"),
+            "tab": ptab,
+        })
+    if len(parts_out) < 2:
+        parts_out = []
+
     warnings = []
+    if not raw_notes.get("model"):
+        # Never silent: without notes the tab is chord-shape guesswork (this is what a broken
+        # basic-pitch install looked like — every song "worked" but the tab was nonsense).
+        warnings.append({
+            "code": "transcribe-failed",
+            "message": "Note transcription failed on the guitar stem; the tab is a chord-shape guess. "
+                       "Check the server log and re-run setup, then reanalyze.",
+        })
     if guitar.warning:
         warnings.append({
             "code": "guitar-empty" if guitar.empty else "guitar-weak",
@@ -199,7 +268,8 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "meta": {"title": None, "artist": None, "source": None, **(meta or {})},
         "duration": round(duration, 3),
         "tempo": {"bpm": beats["bpm"], "bpm_allin1": struct.get("bpm"), "time_signature": ts,
-                  "beat_source": beat_source, "tempo_folded": beats.get("tempo_folded")},
+                  "beat_source": beat_source, "tempo_folded": beats.get("tempo_folded"),
+                  "tempo_user": beats.get("tempo_user")},
         "beats": beats["beats"],
         "downbeats": beats["downbeats"],
         "key": key,
@@ -209,7 +279,9 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "grid": grid,
         "bars": bars,
         "tab": {k: v for k, v in tab.items() if k != "musicxml"},
+        "parts": parts_out,
         "raw_chords": raw_chords,
+        "input": "guitar" if guitar_only else "band",
         "guitar": {
             "source": guitar.source,
             "rms": round(float(guitar.rms), 5),
@@ -227,12 +299,17 @@ def run(input_path: Path, meta: dict | None = None, progress: Progress | None = 
         "warnings": warnings,
         "models": {"separation": separate.MODEL_NAME, "beats": beats_stage.MODEL_KEY,
                    "sections": structure.MODEL_KEY, "chords": recognizer.key, "chord_input": src_tag,
-                   "key": key_stage.MODEL_KEY, "tab": transcribe_stage.MODEL_KEY, "device": config.DEVICE,
+                   "key": key_stage.MODEL_KEY, "tab": transcribe_stage.MODEL_KEY,
+                   "parts": guitar_parts.MODEL_KEY, "device": config.DEVICE,
                    "demucs_device": config.demucs_device(), "guitar_source": guitar.source,
                    "separation_method": sep_method},
         "timings": timings,
         "created_at": time.time(),
     }
     write_json_atomic(out_path, analysis)
+    # what the library list shows, without parsing the full analysis for every song
+    write_json_atomic(config.track_dir(audio_hash) / "summary.json",
+                      {"version": config.PIPELINE_VERSION, "guitars": max(1, len(parts_out)),
+                       "bpm": beats["bpm"], "key": f"{key.get('tonic')} {key.get('mode')}"})
     progress("done", 100)
     return analysis

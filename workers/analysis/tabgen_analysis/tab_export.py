@@ -107,9 +107,10 @@ def _tech_suffix(note: dict) -> str:
             continue
         seen.add(tok)
         if k == "bend":
-            qt = int(next((t.get("quarter_tones") or 2) for t in note["techniques"] if t["type"] == "bend"))
-            qt = max(1, min(12, qt))
-            bits.append(f"b (0 {qt})")
+            bt = next(t for t in note["techniques"] if t["type"] == "bend")
+            qt = max(1, min(12, int(bt.get("quarter_tones") or 2)))
+            # Points are spread evenly over the note: bend-and-release returns to 0.
+            bits.append(f"b (0 {qt} {qt} 0)" if bt.get("release") else f"b (0 {qt})")
         else:
             bits.append(tok)
     if not bits:
@@ -128,6 +129,62 @@ def _emit_slot(notes: list[dict]) -> str:
         return _note_tex(notes[0])
     inner = " ".join(_note_tex(n) for n in sorted(notes, key=lambda x: -int(x["string"])))
     return f"({inner})"
+
+
+def _slots(qnotes: list[dict]) -> dict[int, list[dict]]:
+    """Group quantized notes by 16th slot, one note per string (two onsets that snap to the
+    same slot on one string would be an impossible beat; keep the more confident one)."""
+    by_slot: dict[int, dict[int, dict]] = {}
+    for n in qnotes:
+        row = by_slot.setdefault(int(n["slot0"]), {})
+        s = int(n["string"])
+        if s not in row or float(n.get("confidence") or 0) > float(row[s].get("confidence") or 0):
+            row[s] = n
+    return {k: sorted(v.values(), key=lambda x: -int(x["string"])) for k, v in by_slot.items()}
+
+
+def _bar_tempo(beats: list[float], beat_ids: list[int], duration: float, fallback: int) -> int:
+    i0, i1 = beat_ids[0], beat_ids[-1]
+    if i0 >= len(beats):
+        return fallback
+    end = beats[i1 + 1] if i1 + 1 < len(beats) else None
+    if end is None:
+        if i1 > i0:  # last bar: extrapolate from its own beats
+            span = (beats[min(i1, len(beats) - 1)] - beats[i0]) / max(1, min(i1, len(beats) - 1) - i0)
+            return max(20, min(300, int(round(60.0 / max(span, 1e-3)))))
+        return fallback
+    span = (end - beats[i0]) / (i1 - i0 + 1)
+    return max(20, min(300, int(round(60.0 / max(span, 1e-3)))))
+
+
+def _with_beat_effect(token: str, effect: str) -> str:
+    """Add a beat effect to an emitted `:dur body` token (`body` may already carry `{...}`)."""
+    dur, body = token.split(" ", 1)
+    if body.startswith("("):
+        close = body.index(")") + 1
+        head, rest = body[:close], body[close:]
+        if rest.startswith("{"):
+            return f"{dur} {head}{{{rest[1:-1]} {effect}}}"
+        return f"{dur} {head}{{{effect}}}"
+    if body.endswith("}"):
+        return f"{dur} {body[:-1]} {effect}}}"
+    return f"{dur} {body}{{{effect}}}"
+
+
+def _emit_tie(notes: list[dict]) -> str:
+    ties = [f"{int(n['fret'])}.{int(n['string'])}{{t}}" for n in sorted(notes, key=lambda x: -int(x["string"]))]
+    return ties[0] if len(ties) == 1 else "(" + " ".join(ties) + ")"
+
+
+def _slot_duration(starting: list[dict], by_slot: dict[int, list[dict]], s0: int, i: int, nslots: int) -> int:
+    """Longest note in the slot, cut at the next onset inside the bar (and the bar end)."""
+    want = max(int(n["dur16"]) for n in starting)
+    nxt = nslots
+    for j in range(i + 1, nslots):
+        if by_slot.get(s0 + j):
+            nxt = j
+            break
+    return max(1, min(want, nxt - i))
 
 
 def _chunks(n16: int) -> list[int]:
@@ -155,10 +212,7 @@ def to_alphatex(
     # alphaTab tuning is high e → low E
     tex_tuning = " ".join(reversed(tuning))
     beats_n, beat_unit = (ts.split("/") + ["4"])[:2]
-    qnotes = quantize_notes(notes, beats, duration)
-    by_slot: dict[int, list[dict]] = {}
-    for n in qnotes:
-        by_slot.setdefault(int(n["slot0"]), []).append(n)
+    by_slot = _slots(quantize_notes(notes, beats, duration))
 
     lines = [
         f'\\title "{_esc(title) or "TabGen"}"',
@@ -169,6 +223,8 @@ def to_alphatex(
         ".",
     ]
     grid = sixteenth_times(beats, duration)
+    cur_tempo = max(1, int(round(bpm)))
+    cur_ts = int(beats_n) if str(beats_n).isdigit() else 4
 
     for bar in bars:
         beat_ids = bar.get("beats") or []
@@ -176,6 +232,9 @@ def to_alphatex(
         if nbeats == 0:
             lines.append(":1 r |")
             continue
+        # Each beat is a quarter note, so the synth only follows the recording if every bar
+        # carries its own measured tempo (live songs drift several BPM).
+        bar_tempo = _bar_tempo(beats, beat_ids, duration, cur_tempo)
         # slots covering this bar: 4 sixteenths per beat in the global grid
         if not beats or beat_ids[0] >= len(beats):
             lines.append(":4 r |")
@@ -191,19 +250,15 @@ def to_alphatex(
             slot = s0 + i
             starting = by_slot.get(slot) or []
             if starting:
-                dur = min(int(starting[0]["dur16"]), nslots - i)
-                # if several notes start here, use the max duration they share
-                dur = min(dur, nslots - i)
+                # One voice: a ringing note is cut at the next onset. Jumping past later
+                # onsets (the old behaviour) silently deleted every note under a long one.
+                dur = _slot_duration(starting, by_slot, s0, i, nslots)
                 chunks = _chunks(dur)
                 used = 0
                 for ci, ch in enumerate(chunks):
                     tok = DUR_TOKENS[ch]
-                    body = _emit_slot(starting)
-                    if ci > 0:
-                        # tied continuation of the same pitch — effects stay on the attack.
-                        # Do not treat `{b (0 4)}` as a chord; chords start with `(`.
-                        if body != "r" and not body.startswith("("):
-                            body = body.split("{")[0] + "{t}"
+                    # Continuations are ties so playback does not re-pick; effects stay on the attack.
+                    body = _emit_slot(starting) if ci == 0 else _emit_tie(starting)
                     parts.append(f":{tok} {body}")
                     used += ch
                 i += used
@@ -219,7 +274,17 @@ def to_alphatex(
                 for ch in chunks:
                     parts.append(f":{DUR_TOKENS[ch]} r")
                 i += rest
-        lines.append(" ".join(parts) + " |")
+        if parts and abs(bar_tempo - cur_tempo) >= max(2, 0.02 * cur_tempo):
+            parts[0] = _with_beat_effect(parts[0], f"tempo {bar_tempo}")
+            cur_tempo = bar_tempo
+        # A bar with more or fewer beats than the time signature (pickups, a missed downbeat)
+        # gets its own signature: alphaTab otherwise starts the next bar after the nominal
+        # length, and the tab / Tab-gitar timeline drifts from the recording.
+        head = ""
+        if nbeats != cur_ts:
+            head = f"\\ts {nbeats} {beat_unit} "
+            cur_ts = nbeats
+        lines.append(head + " ".join(parts) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -245,10 +310,7 @@ def to_musicxml(
 ) -> str:
     tuning = tuning or TUNING_NAMES
     beats_n, beat_unit = (int(x) for x in ((ts.split("/") + ["4"])[:2]))
-    qnotes = quantize_notes(notes, beats, duration)
-    by_slot: dict[int, list[dict]] = {}
-    for n in qnotes:
-        by_slot.setdefault(int(n["slot0"]), []).append(n)
+    by_slot = _slots(quantize_notes(notes, beats, duration))
 
     score = Element("score-partwise", version="3.1")
     work = SubElement(score, "work")
@@ -272,8 +334,9 @@ def to_musicxml(
             attr = SubElement(measure, "attributes")
             SubElement(attr, "divisions").text = str(divisions)
             time = SubElement(attr, "time")
-            SubElement(time, "beats").text = str(nbeats if nbeats in (2, 3, 4, 5, 6) else beats_n)
+            SubElement(time, "beats").text = str(nbeats)
             SubElement(time, "beat-type").text = str(beat_unit)
+            cur_beats = nbeats
             clef = SubElement(attr, "clef")
             SubElement(clef, "sign").text = "TAB"
             SubElement(clef, "line").text = "5"
@@ -292,13 +355,20 @@ def to_musicxml(
             met = SubElement(dt, "metronome")
             SubElement(met, "beat-unit").text = "quarter"
             SubElement(met, "per-minute").text = str(int(round(bpm)))
+        elif nbeats != cur_beats:
+            # irregular bar (pickup, missed downbeat): its own signature keeps it in time
+            attr = SubElement(measure, "attributes")
+            time = SubElement(attr, "time")
+            SubElement(time, "beats").text = str(nbeats)
+            SubElement(time, "beat-type").text = str(beat_unit)
+            cur_beats = nbeats
         s0 = (beat_ids[0] if beat_ids else 0) * SUBDIV
         nslots = nbeats * SUBDIV
         i = 0
         while i < nslots:
             starting = by_slot.get(s0 + i) or []
             if starting:
-                dur = min(int(starting[0]["dur16"]), nslots - i)
+                dur = _slot_duration(starting, by_slot, s0, i, nslots)
                 for ni, n in enumerate(starting):
                     note = SubElement(measure, "note")
                     if ni > 0:
